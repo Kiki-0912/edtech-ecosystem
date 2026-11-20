@@ -64,4 +64,13 @@ class EffortScore {
     }
     return const Color(0xFFF87171);
   }
+
+  /// Short qualitative read on [score], rendered under the ring gauge.
+  String get scoreLabel {
+    if (score >= 85) return 'Excellent';
+    if (score >= 75) return 'Strong';
+    if (score >= 50) return 'Fair';
+    if (score >= 30) return 'Weak';
+    return 'Poor';
+  }
 }

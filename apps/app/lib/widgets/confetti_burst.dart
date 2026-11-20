@@ -1,38 +1,76 @@
 import 'dart:math' as math;
+import 'package:edtech_app/theme.dart';
 import 'package:flutter/material.dart';
 
-/// A lightweight confetti burst overlay. Show it once to celebrate a
-/// positive result (e.g. a high integrity score). Purely decorative.
+/// "Flame Burst" — 24 orange/amber/white particles radiate outward then
+/// fall under gravity. Trigger by calling [ConfettiBurstController.fire].
 class ConfettiBurst extends StatefulWidget {
   final Widget child;
+  final ConfettiBurstController controller;
 
-  const ConfettiBurst({super.key, required this.child});
+  const ConfettiBurst({
+    super.key,
+    required this.child,
+    required this.controller,
+  });
 
   @override
-  State<ConfettiBurst> createState() => ConfettiBurstState();
+  State<ConfettiBurst> createState() => _ConfettiBurstState();
 }
 
-class ConfettiBurstState extends State<ConfettiBurst>
+class _ConfettiBurstState extends State<ConfettiBurst>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
+  late final AnimationController _anim = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 2200),
+    duration: const Duration(milliseconds: 1800),
   );
 
-  bool _active = false;
+  List<_Particle> _particles = [];
 
-  void celebrate() {
-    if (_active) return;
-    setState(() => _active = true);
-    _controller.forward(from: 0).whenComplete(() {
-      if (mounted) setState(() => _active = false);
+  @override
+  void initState() {
+    super.initState();
+    widget.controller._attach(_fire);
+    _anim.addStatusListener((s) {
+      if (s == AnimationStatus.completed) {
+        setState(() => _particles = []);
+      }
     });
   }
 
   @override
+  void didUpdateWidget(covariant ConfettiBurst old) {
+    super.didUpdateWidget(old);
+    if (old.controller != widget.controller) {
+      old.controller._detach();
+      widget.controller._attach(_fire);
+    }
+  }
+
+  @override
   void dispose() {
-    _controller.dispose();
+    widget.controller._detach();
+    _anim.dispose();
     super.dispose();
+  }
+
+  void _fire() {
+    final rng = math.Random();
+    final colors = [kOrange200, kOrange300, kOrange400, kOrange500, Colors.white];
+    _particles = List.generate(24, (i) {
+      final angle = (i / 24) * 2 * math.pi;
+      final speed = 0.5 + rng.nextDouble() * 0.5;
+      return _Particle(
+        angle: angle,
+        speed: speed,
+        color: colors[rng.nextInt(colors.length)],
+        size: 4.0 + rng.nextDouble() * 6.0,
+        isSquare: rng.nextBool(),
+        spin: (rng.nextDouble() - 0.5) * 6,
+      );
+    });
+    _anim.forward(from: 0);
+    setState(() {});
   }
 
   @override
@@ -40,16 +78,18 @@ class ConfettiBurstState extends State<ConfettiBurst>
     return Stack(
       children: [
         widget.child,
-        if (_active)
-          IgnorePointer(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, _) {
-                return CustomPaint(
-                  painter: _ConfettiPainter(progress: _controller.value),
-                  child: const SizedBox.expand(),
-                );
-              },
+        if (_particles.isNotEmpty)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _anim,
+                builder: (_, __) => CustomPaint(
+                  painter: _FlamePainter(
+                    particles: _particles,
+                    progress: _anim.value,
+                  ),
+                ),
+              ),
             ),
           ),
       ],
@@ -57,63 +97,80 @@ class ConfettiBurstState extends State<ConfettiBurst>
   }
 }
 
-class _ConfettiPainter extends CustomPainter {
-  final double progress;
-  static final _random = math.Random(42);
+// ---------------------------------------------------------------------------
 
-  // Pre-generate particle specs once so they don't flicker between frames.
-  static final List<({double x, double angle, double velocity, Color color, double size, double rotationSpeed})>
-      _particles = List.generate(36, (i) {
-    const palette = [
-      Color(0xFFFF6A00),
-      Color(0xFFFFB347),
-      Color(0xFFEC4899),
-      Color(0xFF34D399),
-      Color(0xFFFBBF24),
-      Color(0xFF60A5FA),
-    ];
-    return (
-      x: _random.nextDouble(),
-      angle: -math.pi / 2 + (_random.nextDouble() - 0.5) * math.pi * 1.4,
-      velocity: 0.4 + _random.nextDouble() * 0.5,
-      color: palette[i % palette.length],
-      size: 5 + _random.nextDouble() * 7,
-      rotationSpeed: (_random.nextDouble() - 0.5) * 12,
-    );
+class ConfettiBurstController {
+  VoidCallback? _fire;
+
+  void _attach(VoidCallback fire) => _fire = fire;
+  void _detach() => _fire = null;
+
+  void fire() => _fire?.call();
+}
+
+// ---------------------------------------------------------------------------
+
+class _Particle {
+  final double angle;
+  final double speed;
+  final Color color;
+  final double size;
+  final bool isSquare;
+  final double spin;
+
+  const _Particle({
+    required this.angle,
+    required this.speed,
+    required this.color,
+    required this.size,
+    required this.isSquare,
+    required this.spin,
   });
+}
 
-  _ConfettiPainter({required this.progress});
+class _FlamePainter extends CustomPainter {
+  final List<_Particle> particles;
+  final double progress; // 0..1
+
+  const _FlamePainter({required this.particles, required this.progress});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..style = PaintingStyle.fill;
+    final paint = Paint()..isAntiAlias = true;
+    final cx = size.width / 2;
+    final cy = size.height / 2;
 
-    for (final p in _particles) {
-      // Ease-out trajectory.
-      final t = Curves.easeOut.transform(progress.clamp(0.0, 1.0));
-      final travel = t * p.velocity * size.height * 0.9;
-      final cx = size.width * p.x + math.cos(p.angle) * travel * 0.5;
-      final cy = size.height * 0.35 + math.sin(p.angle) * travel;
+    // Ease-out for radial travel; linear for gravity drop.
+    final eased = Curves.easeOut.transform(progress);
+    const gravity = 300.0; // pixels
 
-      // Fade out near the end.
+    for (final p in particles) {
+      final radius = eased * p.speed * size.height * 0.42;
+      final px = cx + math.cos(p.angle) * radius;
+      final py = cy + math.sin(p.angle) * radius + gravity * progress * progress * p.speed;
       final opacity = (1.0 - progress).clamp(0.0, 1.0);
+
       paint.color = p.color.withValues(alpha: opacity);
+      paint.style = PaintingStyle.fill;
 
       canvas.save();
-      canvas.translate(cx, cy);
-      canvas.rotate(p.rotationSpeed * progress);
+      canvas.translate(px, py);
+      canvas.rotate(p.spin * progress);
 
-      // Small rounded rect "confetti" chip.
-      final rrect = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size * 0.55),
-        const Radius.circular(2),
-      );
-      canvas.drawRRect(rrect, paint);
+      if (p.isSquare) {
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size),
+          paint,
+        );
+      } else {
+        canvas.drawCircle(Offset.zero, p.size / 2, paint);
+      }
+
       canvas.restore();
     }
   }
 
   @override
-  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) =>
-      oldDelegate.progress != progress;
+  bool shouldRepaint(covariant _FlamePainter old) =>
+      old.progress != progress;
 }

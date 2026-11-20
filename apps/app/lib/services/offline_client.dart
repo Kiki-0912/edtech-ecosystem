@@ -174,9 +174,7 @@ class OfflineClient extends http.BaseClient {
       case 'telemetry':
         return _Result(200, {'data': {'status': 'ok'}});
       case 'integrity':
-        return _Result(404, {
-          'error': {'code': 'NOT_FOUND', 'message': 'No integrity report'},
-        });
+        return _integrityRoute(rest, method);
       default:
         return _Result(404, {
           'error': {'code': 'NOT_FOUND', 'message': 'Unknown route $path'},
@@ -424,6 +422,23 @@ class OfflineClient extends http.BaseClient {
     return _Result(404, {
       'error': {'code': 'NOT_FOUND', 'message': 'Unknown department route'},
     });
+  }
+
+  /// `GET /integrity/:assignmentId/:studentId` — the stored telemetry report,
+  /// or 404 when none has been captured for that pair.
+  Future<_Result> _integrityRoute(List<String> rest, String method) async {
+    if (method != 'GET' || rest.length < 3) {
+      return _Result(405, {
+        'error': {'code': 'METHOD_NOT_ALLOWED', 'message': 'Method not allowed'},
+      });
+    }
+    final report = await _store.getIntegrityReport(rest[1], rest[2]);
+    if (report == null) {
+      return _Result(404, {
+        'error': {'code': 'NOT_FOUND', 'message': 'No integrity report'},
+      });
+    }
+    return _Result(200, {'data': report});
   }
 
   Future<_Result> _attendanceRoute(

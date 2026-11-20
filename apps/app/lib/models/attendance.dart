@@ -1,5 +1,3 @@
-import 'package:edtech_app/models/user.dart';
-
 class AttendanceRecord {
   final String id;
   final String courseId;

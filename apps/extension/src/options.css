@@ -1,23 +1,25 @@
 :root {
   color-scheme: light dark;
-  --bg: #f6f7fb;
-  --card: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --primary: #4f46e5;
-  --primary-dark: #3730a3;
-  --success: #10b981;
-  --error: #dc2626;
+  --bg: #F7F7F7;
+  --card: #FFFFFF;
+  --text: #0A0A0A;
+  --muted: #666666;
+  --border: #E8E8E8;
+  --primary: #FF6B00;
+  --primary-dark: #E55A00;
+  --success: #FF9500;
+  --error: #CC4500;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0f1220;
-    --card: #171a2b;
-    --text: #f3f4f6;
-    --muted: #9ca3af;
-    --border: #262a3d;
+    --bg: #0A0A0A;
+    --card: #141414;
+    --text: #F7F7F7;
+    --muted: #9A9A9A;
+    --border: #282828;
+    --primary: #FF6B00;
+    --primary-dark: #E55A00;
   }
 }
 
@@ -40,8 +42,9 @@ body {
 
 .header h1 {
   margin: 0;
-  font-size: 26px;
-  font-weight: 800;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
   background: linear-gradient(120deg, var(--primary), var(--primary-dark));
   -webkit-background-clip: text;
   background-clip: text;
@@ -52,21 +55,23 @@ body {
   margin: 4px 0 24px;
   color: var(--muted);
   font-size: 14px;
+  font-weight: 500;
 }
 
 .card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 16px;
-  padding: 20px;
+  padding: 24px;
   margin-bottom: 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
 }
 
 .card h2 {
   margin: 0 0 8px;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
 }
 
 .hint {
@@ -80,56 +85,65 @@ body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 label {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 input[type="text"],
 input[type="password"],
 input[type="url"] {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
   font-size: 14px;
   background: transparent;
   color: var(--text);
+  transition: border-color 0.2s ease;
 }
 
 input:focus {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(255, 107, 0, 0.2);
 }
 
 .actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 12px;
 }
 
 button {
-  padding: 10px 18px;
+  padding: 10px 20px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(120deg, var(--primary), var(--primary-dark));
-  color: #fff;
-  font-weight: 700;
-  font-size: 14px;
+  background: var(--primary);
+  color: #000000;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.02em;
   cursor: pointer;
+  transition: all 0.2s ease;
 }
 
 button:hover {
-  filter: brightness(1.08);
+  background: var(--primary-dark);
+  box-shadow: 0 0 14px rgba(255, 107, 0, 0.35);
 }
 
 button.ghost {
   background: transparent;
   color: var(--primary);
-  border: 1px solid var(--border);
+  border: 1px solid var(--primary);
+}
+
+button.ghost:hover {
+  background: rgba(255, 107, 0, 0.1);
 }
 
 .status {
@@ -141,15 +155,17 @@ button.ghost {
 
 .status.ok {
   color: var(--success);
+  font-weight: 700;
 }
 
 .status.err {
   color: var(--error);
+  font-weight: 700;
 }
 
 .consent {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
   font-weight: 500;
   font-size: 14px;
@@ -175,24 +191,32 @@ button.ghost {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 107, 0, 0.04);
+  border: 1px solid var(--border);
 }
 
 .stats dt {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  font-weight: 700;
 }
 
 .stats dd {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--primary);
 }
 
 code {
-  background: rgba(79, 70, 229, 0.1);
-  padding: 1px 5px;
-  border-radius: 6px;
+  background: rgba(255, 107, 0, 0.15);
+  color: var(--primary);
+  padding: 2px 6px;
+  border-radius: 4px;
   font-size: 12px;
+  font-weight: 600;
 }

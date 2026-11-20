@@ -1,5 +1,6 @@
 import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/theme.dart';
+import 'package:edtech_app/theme_controller.dart';
 import 'package:edtech_app/screens/dashboard_screen.dart';
 import 'package:edtech_app/screens/courses_screen.dart';
 import 'package:edtech_app/screens/calendar_screen.dart';
@@ -25,17 +26,21 @@ class _SwipeableShellState extends State<SwipeableShell> {
   int _index = 0;
   final PageController _pageController = PageController();
 
-  static final List<Widget> _screens = <Widget>[
-    const DashboardScreen(),
-    const CoursesScreen(),
-    const CalendarScreen(),
-    const ChatScreen(),
-    const IntegrityScreen(),
-    const StudentManagementScreen(),
-    const DepartmentManagementScreen(),
-    const AttendanceScreen(),
-    const NotesScreen(),
-  ];
+  /// Built fresh on every [build] on purpose: a `const DashboardScreen()` is
+  /// canonicalised to the same instance each time, so the element tree would
+  /// short-circuit on `identical` and the tab would keep rendering whichever
+  /// palette was active when it was first mounted.
+  List<Widget> _buildScreens() => <Widget>[
+        DashboardScreen(),
+        CoursesScreen(),
+        CalendarScreen(),
+        ChatScreen(),
+        IntegrityScreen(),
+        StudentManagementScreen(),
+        DepartmentManagementScreen(),
+        AttendanceScreen(),
+        NotesScreen(),
+      ];
 
   static const List<String> _titles = <String>[
     'Dashboard',
@@ -78,6 +83,9 @@ class _SwipeableShellState extends State<SwipeableShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Re-runs `build` when the light/dark palette flips (the shell is also
+    // wrapped in a ThemedScope; this keeps it correct however it is mounted).
+    context.watch<ThemeController>();
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < 600;
 
@@ -102,7 +110,7 @@ class _SwipeableShellState extends State<SwipeableShell> {
                   const SizedBox(width: kSpaceSm),
                   Text(
                     _titles[_index],
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 18,
                       color: kTextPrimary,
@@ -117,7 +125,7 @@ class _SwipeableShellState extends State<SwipeableShell> {
               actions: [
                 IconButton(
                   tooltip: 'Menu',
-                  icon: const Icon(Icons.menu_rounded, color: kTextPrimary),
+                  icon: Icon(Icons.menu_rounded, color: kTextPrimary),
                   onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                 ),
               ],
@@ -135,7 +143,7 @@ class _SwipeableShellState extends State<SwipeableShell> {
             child: PageView(
               controller: _pageController,
               onPageChanged: (index) => setState(() => _index = index),
-              children: _screens,
+              children: _buildScreens(),
             ),
           ),
           if (isMobile)
@@ -146,7 +154,7 @@ class _SwipeableShellState extends State<SwipeableShell> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Divider(height: 1, color: kDivider),
+                    Divider(height: 1, color: kDivider),
                     SizedBox(
                       height: 72,
                       child: Row(
@@ -282,6 +290,7 @@ class AppDrawer extends StatelessWidget {
                       },
                     ),
                   const Divider(height: 32),
+                  _ThemeToggle(),
                   _DrawerItem(
                     icon: Icons.logout_rounded,
                     title: 'Sign out',
@@ -309,6 +318,57 @@ class _DrawerItemData {
   final String subtitle;
 
   const _DrawerItemData(this.icon, this.title, this.subtitle);
+}
+
+/// Light / dark switch that mirrors the rest of the drawer's list rows.
+class _ThemeToggle extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final theme = context.watch<ThemeController>();
+    final subtitle = switch (theme.mode) {
+      ThemeMode.system => 'Following system',
+      ThemeMode.dark => 'On',
+      ThemeMode.light => 'Off',
+    };
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: kSpaceMd, vertical: kSpaceXs),
+      leading: Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: tintOf(kTextSecondary, 0.10),
+          borderRadius: BorderRadius.circular(kRadiusSm),
+        ),
+        child: Icon(
+          theme.isDark ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+          color: kTextSecondary,
+          size: 22,
+        ),
+      ),
+      title: Text(
+        'Dark mode',
+        style: TextStyle(
+          fontWeight: FontWeight.w700,
+          color: kTextPrimary,
+          fontSize: 15,
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(color: kTextSecondary, fontSize: 12),
+      ),
+      trailing: Switch(
+        value: theme.isDark,
+        // Off goes to *light* rather than `system`: on a device whose OS is
+        // already dark, `system` would be a no-op and the switch would spring
+        // straight back on.
+        onChanged: (enabled) =>
+            theme.setMode(enabled ? ThemeMode.dark : ThemeMode.light),
+      ),
+      dense: true,
+    );
+  }
 }
 
 class _DrawerHeader extends StatelessWidget {
@@ -394,7 +454,7 @@ class _DrawerItem extends StatelessWidget {
         ),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontWeight: FontWeight.w700,
             color: kTextPrimary,
             fontSize: 15,
@@ -402,7 +462,7 @@ class _DrawerItem extends StatelessWidget {
         ),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(
+          style: TextStyle(
             color: kTextSecondary,
             fontSize: 12,
           ),
@@ -424,11 +484,11 @@ class _DrawerFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(kSpaceMd),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: kSurface,
         border: Border(top: BorderSide(color: kDivider)),
       ),
-      child: const Column(
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           ListTile(

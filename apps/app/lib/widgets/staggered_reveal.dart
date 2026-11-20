@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
 
-/// Wraps a list of children so each item springs in one-by-one with a
-/// playful stagger. Re-runs the animation whenever [childCount] changes.
+/// Wraps a list of children so each item wipes in one-by-one with a stagger.
+///
+/// [fromRight] = true  → slides from right  (Offset(0.08, 0) → Offset.zero)
+/// [fromRight] = false → slides from bottom (Offset(0, 0.08) → Offset.zero)
+///
+/// Stagger: 60 ms per item. Curve: easeOutCubic.
 class StaggeredReveal extends StatelessWidget {
   final int childCount;
   final IndexedWidgetBuilder itemBuilder;
   final Duration baseDelay;
-  final double slideOffset;
+  final bool fromRight;
 
   const StaggeredReveal({
     super.key,
     required this.childCount,
     required this.itemBuilder,
     this.baseDelay = const Duration(milliseconds: 60),
-    this.slideOffset = 28,
+    this.fromRight = true,
   });
 
   @override
@@ -23,7 +27,7 @@ class StaggeredReveal extends StatelessWidget {
       children: List.generate(childCount, (index) {
         return _StaggeredItem(
           delay: baseDelay * index,
-          slideOffset: slideOffset,
+          fromRight: fromRight,
           child: itemBuilder(context, index),
         );
       }),
@@ -33,12 +37,12 @@ class StaggeredReveal extends StatelessWidget {
 
 class _StaggeredItem extends StatefulWidget {
   final Duration delay;
-  final double slideOffset;
+  final bool fromRight;
   final Widget child;
 
   const _StaggeredItem({
     required this.delay,
-    required this.slideOffset,
+    required this.fromRight,
     required this.child,
   });
 
@@ -50,18 +54,19 @@ class _StaggeredItemState extends State<_StaggeredItem>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 550),
+    duration: const Duration(milliseconds: 400),
   );
 
-  late final Animation<double> _opacity = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0.0, 0.65, curve: Curves.easeOut),
+  late final Animation<double> _fade = Tween<double>(begin: 0, end: 1).animate(
+    CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
   );
 
   late final Animation<Offset> _slide = Tween<Offset>(
-    begin: Offset(0, widget.slideOffset / 100),
+    begin: widget.fromRight ? const Offset(0.08, 0) : const Offset(0, 0.08),
     end: Offset.zero,
-  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+  ).animate(
+    CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+  );
 
   @override
   void initState() {
@@ -80,7 +85,7 @@ class _StaggeredItemState extends State<_StaggeredItem>
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
-      opacity: _opacity,
+      opacity: _fade,
       child: SlideTransition(
         position: _slide,
         child: widget.child,

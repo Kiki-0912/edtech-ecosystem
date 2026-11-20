@@ -2,8 +2,13 @@ import 'package:edtech_app/models/calendar_event.dart';
 import 'package:edtech_app/theme.dart';
 import 'package:flutter/material.dart';
 
-/// A polished deadline tile with a gradient wash, emoji badge, and relative
-/// timing pill. Soft shadows and springy press feedback.
+/// NOIR FLAME deadline card.
+///
+/// Left edge = 4 px solid orange line.
+/// Card body is `Color(0xFF1A1A1A)` (dark) or white (light).
+/// Event kind chip floats in the top-right as an orange pill with white text.
+/// Date displayed in large bold orange. Title in white/black.
+/// Spring press animation on tap.
 class DeadlineCard extends StatefulWidget {
   final CalendarEvent event;
   final VoidCallback? onTap;
@@ -30,126 +35,15 @@ class _DeadlineCardState extends State<DeadlineCard>
 
   void _press() => _controller.animateTo(
         0.95,
-        duration: const Duration(milliseconds: 80),
+        duration: const Duration(milliseconds: 75),
         curve: Curves.easeOutCubic,
       );
+
   void _release() => _controller.animateTo(
         1.0,
-        duration: const Duration(milliseconds: 550),
+        duration: const Duration(milliseconds: 560),
         curve: Curves.elasticOut,
       );
-
-  @override
-  Widget build(BuildContext context) {
-    final kindColor = _kindColor(widget.event.kind);
-    final emoji = _kindEmoji(widget.event.kind);
-    final relative = _relative(widget.event.startsAt);
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => _press(),
-      onTapUp: (_) => _release(),
-      onTapCancel: _release,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: kCard,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: kindColor.withValues(alpha: 0.18),
-              blurRadius: 20,
-              offset: const Offset(0, 12),
-            ),
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.08),
-              blurRadius: 10,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          child: Row(
-            children: [
-              // Emoji badge with subtle shadow.
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: tintOf(kindColor, 0.14),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: kindColor.withValues(alpha: 0.3),
-                      blurRadius: 12,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(emoji, style: const TextStyle(fontSize: 24)),
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Content column.
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.event.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: kTextPrimary,
-                        fontSize: 15,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${widget.event.kind}  ·  ${widget.event.courseId ?? 'Institution'}',
-                      style: const TextStyle(fontSize: 11, color: kTextSecondary),
-                    ),
-                  ],
-                ),
-              ),
-              // Timing pill + emoji together on the right.
-              Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: kindColor,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '${widget.event.startsAt.month}/${widget.event.startsAt.day}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    relative,
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: kindColor,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   String _relative(DateTime start) {
     final days = start.difference(DateTime.now()).inDays;
@@ -160,33 +54,165 @@ class _DeadlineCardState extends State<DeadlineCard>
     return 'in $days days';
   }
 
-  Color _kindColor(String kind) {
-    switch (kind) {
-      case 'assignment':
-        return kPrimary;
-      case 'quiz':
-        return kWarning;
-      case 'class':
-        return kSuccess;
-      case 'institution':
-        return kPink;
-      default:
-        return kPurple;
-    }
-  }
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1A1A1A) : Colors.white;
+    final titleColor = isDark ? Colors.white : const Color(0xFF0A0A0A);
+    final subtitleColor = isDark ? const Color(0xFF9A9A9A) : const Color(0xFF666666);
+    final borderColor = isDark ? const Color(0xFF282828) : const Color(0xFFE8E8E8);
 
-  String _kindEmoji(String kind) {
-    switch (kind) {
-      case 'assignment':
-        return '📝';
-      case 'quiz':
-        return '🧠';
-      case 'class':
-        return '🏫';
-      case 'institution':
-        return '🏛️';
-      default:
-        return '📅';
-    }
+    final relative = _relative(widget.event.startsAt);
+    final dateStr =
+        '${widget.event.startsAt.day} / ${widget.event.startsAt.month}';
+
+    // Capitalise the kind label
+    final kindLabel = widget.event.kind[0].toUpperCase() +
+        widget.event.kind.substring(1).toLowerCase();
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => _press(),
+      onTapUp: (_) => _release(),
+      onTapCancel: _release,
+      child: ScaleTransition(
+        scale: _controller,
+        child: Container(
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: kOrange500.withValues(alpha: 0.08),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // ── 4 px orange left edge ─────────────────────────────────
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: kOrange500,
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(16),
+                    ),
+                  ),
+                ),
+
+                // ── Card body ─────────────────────────────────────────────
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Top row: date + kind chip
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Date — large bold orange
+                            Text(
+                              dateStr,
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: kOrange500,
+                                letterSpacing: -0.5,
+                                height: 1,
+                              ),
+                            ),
+                            const Spacer(),
+                            // Kind pill
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: kOrange500,
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: kOrange500.withValues(alpha: 0.3),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Text(
+                                kindLabel,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.white,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        // Title
+                        Text(
+                          widget.event.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            color: titleColor,
+                            height: 1.3,
+                          ),
+                        ),
+
+                        const SizedBox(height: 4),
+
+                        // Source / relative timing
+                        Row(
+                          children: [
+                            Text(
+                              widget.event.courseId ?? 'Institution',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: subtitleColor,
+                              ),
+                            ),
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 6),
+                              child: Text(
+                                '·',
+                                style: TextStyle(color: subtitleColor),
+                              ),
+                            ),
+                            Text(
+                              relative,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: kOrange500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

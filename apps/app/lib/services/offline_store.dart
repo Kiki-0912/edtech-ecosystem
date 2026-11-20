@@ -20,6 +20,7 @@ class OfflineStore {
   static const _submissionsKey = 'offline_submissions_v1';
   static const _messagesKey = 'offline_messages_v1';
   static const _calendarKey = 'offline_calendar_v1';
+  static const _integrityKey = 'offline_integrity_v1';
 
   SharedPreferences? _prefs;
   bool _loaded = false;
@@ -32,6 +33,7 @@ class OfflineStore {
   List<Map<String, dynamic>> _submissions = [];
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> _calendar = [];
+  List<Map<String, dynamic>> _integrity = [];
 
   Future<void> _ensureLoaded() async {
     if (_loaded) return;
@@ -44,6 +46,7 @@ class OfflineStore {
     _submissions = _read(_submissionsKey);
     _messages = _read(_messagesKey);
     _calendar = _read(_calendarKey);
+    _integrity = _read(_integrityKey);
     if (_students.isEmpty && _departments.isEmpty) {
       _seed();
       await _persistAll();
@@ -80,6 +83,7 @@ class OfflineStore {
     await _persist(_submissionsKey, _submissions);
     await _persist(_messagesKey, _messages);
     await _persist(_calendarKey, _calendar);
+    await _persist(_integrityKey, _integrity);
   }
 
   String _id(String prefix) =>
@@ -975,6 +979,40 @@ class OfflineStore {
       ],
       'rows': rows,
     };
+  }
+
+  /* ============================================
+     INTEGRITY
+     ============================================ */
+
+  /// The telemetry report for one assignment + student, or `null` when the
+  /// Integrity Lens extension has not produced one yet. Nothing is seeded:
+  /// a report only exists once it has actually been captured.
+  Future<Map<String, dynamic>?> getIntegrityReport(
+    String assignmentId,
+    String studentId,
+  ) async {
+    await _ensureLoaded();
+    for (final row in _integrity) {
+      if (row['assignmentId'] == assignmentId &&
+          row['studentId'] == studentId) {
+        return Map<String, dynamic>.from(row);
+      }
+    }
+    return null;
+  }
+
+  /// Persists a captured report, replacing any earlier one for the same
+  /// assignment and student.
+  Future<void> setIntegrityReport(Map<String, dynamic> report) async {
+    await _ensureLoaded();
+    _integrity.removeWhere(
+      (row) =>
+          row['assignmentId'] == report['assignmentId'] &&
+          row['studentId'] == report['studentId'],
+    );
+    _integrity.add(Map<String, dynamic>.from(report));
+    await _persist(_integrityKey, _integrity);
   }
 
   /* ============================================

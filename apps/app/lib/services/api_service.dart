@@ -624,6 +624,26 @@ class ApiService {
     }
   }
 
+  /// Posts [body] to [courseId]'s discussion channel, preferring anything that
+  /// is not an announcement channel. Returns the channel name on success so the
+  /// caller can confirm where the message landed.
+  Future<String> messageCourseChannel({
+    required String courseId,
+    required String authorId,
+    required String body,
+  }) async {
+    final channels = await getChannels(courseId);
+    if (channels.isEmpty) {
+      throw Exception('This course has no chat channel yet');
+    }
+    final channel = channels.firstWhere(
+      (item) => item.kind != 'announcement',
+      orElse: () => channels.first,
+    );
+    await postMessage(channelId: channel.id, authorId: authorId, body: body);
+    return channel.name;
+  }
+
   Future<Map<String, dynamic>> register({
     required String phone,
     required String email,

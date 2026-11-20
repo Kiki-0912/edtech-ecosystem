@@ -4,7 +4,10 @@ import 'package:edtech_app/theme.dart';
 import 'package:edtech_app/widgets/bounce_tap.dart';
 import 'package:edtech_app/widgets/stat_card.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+/// NOIR FLAME — "The Archive" Notes Screen
+/// Organised by course code and book, with card masonry, modal reader, and flame accents.
 class NotesScreen extends StatefulWidget {
   const NotesScreen({super.key});
 
@@ -16,7 +19,7 @@ class _NotesScreenState extends State<NotesScreen> {
   List<Course> _courses = [];
   List<Map<String, dynamic>> _notes = [];
   String? _selectedCourseId;
-  String _filterCourseCode = '';
+  String _searchQuery = '';
   bool _loading = true;
   bool _creating = false;
 
@@ -24,6 +27,7 @@ class _NotesScreenState extends State<NotesScreen> {
   final TextEditingController _courseCodeCtrl = TextEditingController();
   final TextEditingController _titleCtrl = TextEditingController();
   final TextEditingController _contentCtrl = TextEditingController();
+  final TextEditingController _searchCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -31,372 +35,586 @@ class _NotesScreenState extends State<NotesScreen> {
     _loadData();
   }
 
+  @override
+  void dispose() {
+    _bookNameCtrl.dispose();
+    _courseCodeCtrl.dispose();
+    _titleCtrl.dispose();
+    _contentCtrl.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
     setState(() => _loading = true);
     final api = ApiService();
-    final courses = await api.getCourses();
-    final notes = await api.getTeacherNotes();
-    if (!mounted) return;
-    setState(() {
-      _courses = courses;
-      _notes = notes.map((n) => n.toJson()).toList();
-      _loading = false;
-    });
+    try {
+      final courses = await api.getCourses();
+      final notes = await api.getTeacherNotes();
+      if (!mounted) return;
+      setState(() {
+        _courses = courses;
+        _notes = notes.map((n) => n.toJson()).toList();
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
   }
 
   Future<void> _createNote() async {
     if (_titleCtrl.text.isEmpty || _courseCodeCtrl.text.isEmpty) return;
     setState(() => _creating = true);
     final api = ApiService();
-    await api.createTeacherNote(
-      courseId: _selectedCourseId ?? '',
-      bookName: _bookNameCtrl.text.trim(),
-      courseCode: _courseCodeCtrl.text.trim(),
-      title: _titleCtrl.text.trim(),
-      content: _contentCtrl.text.trim(),
-    );
-    _bookNameCtrl.clear();
-    _courseCodeCtrl.clear();
-    _titleCtrl.clear();
-    _contentCtrl.clear();
-    setState(() => _creating = false);
-    await _loadData();
+    try {
+      await api.createTeacherNote(
+        courseId: _selectedCourseId ?? '',
+        bookName: _bookNameCtrl.text.trim(),
+        courseCode: _courseCodeCtrl.text.trim(),
+        title: _titleCtrl.text.trim(),
+        content: _contentCtrl.text.trim(),
+      );
+      _bookNameCtrl.clear();
+      _courseCodeCtrl.clear();
+      _titleCtrl.clear();
+      _contentCtrl.clear();
+      if (mounted) Navigator.pop(context);
+      await _loadData();
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
   }
 
-  Future<void> _deleteNote(String id) async {
-    final api = ApiService();
-    await api.deleteTeacherNote(id);
-    await _loadData();
+  List<Map<String, dynamic>> get _filteredNotes {
+    var list = _notes;
+    if (_selectedCourseId != null && _selectedCourseId!.isNotEmpty) {
+      list = list.where((n) => n['courseId'] == _selectedCourseId).toList();
+    }
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      list = list.where((n) {
+        final title = (n['title'] ?? '').toString().toLowerCase();
+        final book = (n['bookName'] ?? '').toString().toLowerCase();
+        final code = (n['courseCode'] ?? '').toString().toLowerCase();
+        return title.contains(q) || book.contains(q) || code.contains(q);
+      }).toList();
+    }
+    return list;
+  }
+
+  void _showNoteReader(Map<String, dynamic> note) {
+    HapticFeedback.lightImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: kBorder, width: 1),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: kBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: kPrimary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: kPrimary.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      note['courseCode'] ?? 'NOTE',
+                      style: const TextStyle(
+                        color: kPrimary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    note['bookName'] ?? '',
+                    style: TextStyle(
+                      color: kTextSecondary,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                note['title'] ?? 'Untitled Note',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  color: kTextPrimary,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Divider(color: kDivider),
+              const SizedBox(height: 16),
+              Text(
+                note['content'] ?? '',
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
+                  color: kTextBody,
+                ),
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: kPrimary,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Close Archive', style: TextStyle(fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCreateSheet() {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: kSurface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border.all(color: kBorder, width: 1),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: kBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  'RECORD IN ARCHIVE',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 1.5,
+                    color: kPrimary,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Create Teacher Note',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                    color: kTextPrimary,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<String>(
+                  value: _selectedCourseId,
+                  decoration: const InputDecoration(labelText: 'Course'),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('General / Non-course')),
+                    ..._courses.map((c) => DropdownMenuItem(
+                          value: c.id,
+                          child: Text('${c.code} · ${c.title}'),
+                        )),
+                  ],
+                  onChanged: (v) => setState(() => _selectedCourseId = v == '' ? null : v),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _courseCodeCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Course Code (e.g. CIT-301)',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _bookNameCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Reference Book / Syllabus',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _titleCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Note Headline',
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _contentCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Note Details / Key Takeaways',
+                  ),
+                  maxLines: 4,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton(
+                    onPressed: _creating ? null : _createNote,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: kPrimary,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: _creating
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
+                          )
+                        : const Text('Save to Archive', style: TextStyle(fontWeight: FontWeight.w900)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredNotes;
+
     return Scaffold(
       backgroundColor: kBackground,
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showCreateSheet,
+        backgroundColor: kPrimary,
+        elevation: 4,
+        child: const Icon(Icons.add, color: Colors.black, size: 26),
+      ),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
+          ? const Center(child: CircularProgressIndicator(color: kPrimary, strokeWidth: 2))
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(kSpaceLg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // ── Header ───────────────────────────────────────────────────
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'KNOWLEDGE VAULT',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                        color: kPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Teacher Notes',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: -0.8,
+                        color: kTextPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── Stat Tiles ───────────────────────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatCard(
+                        title: 'Total Notes',
+                        value: _notes.length,
+                        icon: Icons.note_alt_outlined,
+                        color: kPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: StatCard(
+                        title: 'Courses',
+                        value: _courses.length,
+                        icon: Icons.auto_stories_outlined,
+                        color: kAccent,
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 18),
+
+                // ── Search & Course Filter Ribbon ────────────────────────────
+                Container(
+                  decoration: BoxDecoration(
+                    color: kSurface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: kBorder),
+                  ),
+                  child: TextField(
+                    controller: _searchCtrl,
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                    style: TextStyle(color: kTextPrimary, fontSize: 14),
+                    decoration: InputDecoration(
+                      hintText: 'Search notes by book or topic...',
+                      hintStyle: TextStyle(color: kTextSecondary, fontSize: 13),
+                      prefixIcon: const Icon(Icons.search, color: kPrimary, size: 20),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() => _searchQuery = '');
+                              },
+                            )
+                          : null,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Course selector pills
+                SizedBox(
+                  height: 34,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
                     children: [
-                      Text(
-                        'Teacher Notes',
-                        style: context.h3.copyWith(
-                          fontWeight: FontWeight.w900,
-                          color: kTextPrimary,
+                      _CoursePill(
+                        label: 'All Courses',
+                        selected: _selectedCourseId == null,
+                        onTap: () => setState(() => _selectedCourseId = null),
+                      ),
+                      const SizedBox(width: 8),
+                      ..._courses.map((c) => Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _CoursePill(
+                              label: c.code,
+                              selected: _selectedCourseId == c.id,
+                              onTap: () => setState(() => _selectedCourseId = c.id),
+                            ),
+                          )),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // ── Note Grid / List ─────────────────────────────────────────
+                if (filtered.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(
+                      color: kSurface,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.notes_rounded, size: 40, color: kTextSecondary),
+                        const SizedBox(height: 12),
+                        Text(
+                          'ARCHIVE EMPTY',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                            color: kTextPrimary,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: kSpaceXs),
-                      Text(
-                        'Organise notes by book and course code',
-                        style: context.body2.copyWith(color: kTextSecondary),
-                      ),
-                      const SizedBox(height: kSpaceLg),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: StatCard(
-                              title: 'Total Notes',
-                              value: _notes.length,
-                              icon: Icons.note,
-                              color: kPrimary,
-                            ),
-                          ),
-                          const SizedBox(width: kSpaceSm),
-                          Expanded(
-                            child: StatCard(
-                              title: 'Courses',
-                              value: _courses.length,
-                              icon: Icons.school,
-                              color: kAccent,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: kSpaceLg),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedCourseId,
-                              decoration: const InputDecoration(
-                                labelText: 'Filter by Course',
-                                hintText: 'All courses',
-                              ),
-                              items: [
-                                const DropdownMenuItem(
-                                  value: '',
-                                  child: Text('All Courses'),
-                                ),
-                                ..._courses.map((c) => DropdownMenuItem(
-                                      value: c.id,
-                                      child: Text('${c.code} - ${c.title}'),
-                                    )),
-                              ],
-                              onChanged: (v) => setState(() => _selectedCourseId = v == '' ? null : v),
-                            ),
-                          ),
-                          const SizedBox(width: kSpaceSm),
-                          SizedBox(
-                            width: 200,
-                            child: TextField(
-                              controller: TextEditingController(text: _filterCourseCode),
-                              decoration: const InputDecoration(
-                                labelText: 'Course Code',
-                                hintText: 'e.g. CIT-301',
-                              ),
-                              onChanged: (v) => _filterCourseCode = v,
-                              onSubmitted: (_) => _loadData(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: kSpaceLg),
-                if (_notes.isEmpty)
-                  Expanded(
-                    child: Center(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text('📝', style: TextStyle(fontSize: 56)),
-                          const SizedBox(height: kSpaceMd),
-                          Text(
-                            'No notes yet',
-                            style: context.h4.copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: kTextPrimary,
-                            ),
-                          ),
-                          const SizedBox(height: kSpaceSm),
-                          Text(
-                            'Create your first note to get started.',
-                            textAlign: TextAlign.center,
-                            style: context.body2.copyWith(color: kTextSecondary, fontSize: 14),
-                          ),
-                        ],
-                      ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'No notes recorded for this selection.',
+                          style: TextStyle(color: kTextSecondary, fontSize: 13),
+                        ),
+                      ],
                     ),
                   )
                 else
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(kSpaceLg),
-                      itemCount: _notes.length,
-                      itemBuilder: (context, index) {
-                        final n = _notes[index];
-                        if (_selectedCourseId != null && n['courseId'] != _selectedCourseId) return const SizedBox.shrink();
-                        if (_filterCourseCode.isNotEmpty &&
-                            (n['courseCode'] as String?)?.toLowerCase().contains(_filterCourseCode.toLowerCase()) != true)
-                          return const SizedBox.shrink();
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: kSpaceMd),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: kCard,
-                              borderRadius: BorderRadius.circular(kRadiusMd),
-                              border: Border.all(color: kDivider),
-                              boxShadow: [cardShadow(kTextSecondary)],
-                            ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.all(kSpaceMd),
-                              leading: CircleAvatar(
-                                backgroundColor: kPrimary.withValues(alpha: 0.15),
-                                child: Text(
-                                  n['courseCode']?.toString().substring(0, 3).toUpperCase() ?? '?',
-                                  style: const TextStyle(color: kPrimary, fontWeight: FontWeight.bold, fontSize: 14),
-                                ),
-                              ),
-                              title: Text(
-                                n['title'] ?? 'Untitled',
-                                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: kTextPrimary),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: kSpaceXs),
-                                  Text(
-                                    'Book: ${n['bookName'] ?? ''}',
-                                    style: const TextStyle(fontSize: 13, color: kTextBody),
-                                  ),
-                                  const SizedBox(height: kSpaceXs),
-                                  Text(
-                                    'Code: ${n['courseCode'] ?? ''}',
-                                    style: const TextStyle(fontSize: 12, color: kTextSecondary),
-                                  ),
-                                  const SizedBox(height: kSpaceXs),
-                                  Text(
-                                    '${n['createdAt'] ?? ''}',
-                                    style: const TextStyle(fontSize: 11, color: kTextSecondary),
-                                  ),
-                                ],
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete_outline, color: kError),
-                                onPressed: () => _deleteNote(n['id']),
-                              ),
-                              onTap: () => _viewNote(n),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+                  ...filtered.map((note) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _NoteCard(
+                          note: note,
+                          onTap: () => _showNoteReader(note),
+                        ),
+                      )),
               ],
             ),
-            floatingActionButton: BounceTap(
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            gradient: candyGradient,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: kPrimary.withValues(alpha: 0.4),
-                blurRadius: 12,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: const Center(child: Icon(Icons.add_rounded, color: Colors.white, size: 28)),
-        ),
-        onTap: _showCreateDialog,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
+}
 
-  void _showCreateDialog() {
-    _bookNameCtrl.clear();
-    _courseCodeCtrl.clear();
-    _titleCtrl.clear();
-    _contentCtrl.clear();
-    showDialog(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusXl)),
-        child: Padding(
-          padding: const EdgeInsets.all(kSpaceLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Create Note',
-                style: context.h4.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: kTextPrimary,
-                ),
-              ),
-              const SizedBox(height: kSpaceLg),
-              DropdownButtonFormField<String>(
-                value: _selectedCourseId,
-                decoration: const InputDecoration(labelText: 'Course'),
-                items: [
-                  const DropdownMenuItem(value: '', child: Text('Select Course')),
-                  ..._courses.map((c) => DropdownMenuItem(
-                        value: c.id,
-                        child: Text('${c.code} - ${c.title}'),
-                      )),
-                ],
-                onChanged: (v) => setState(() => _selectedCourseId = v == '' ? null : v),
-              ),
-              const SizedBox(height: kSpaceMd),
-              TextField(
-                controller: _bookNameCtrl,
-                decoration: const InputDecoration(labelText: 'Book Name (e.g. Interaction Design)'),
-              ),
-              const SizedBox(height: kSpaceMd),
-              TextField(
-                controller: _courseCodeCtrl,
-                decoration: const InputDecoration(labelText: 'Course Code (e.g. CIT-301)'),
-              ),
-              const SizedBox(height: kSpaceMd),
-              TextField(
-                controller: _titleCtrl,
-                decoration: const InputDecoration(labelText: 'Note Title'),
-              ),
-              const SizedBox(height: kSpaceMd),
-              TextField(
-                controller: _contentCtrl,
-                decoration: const InputDecoration(labelText: 'Content'),
-                maxLines: 4,
-              ),
-              const SizedBox(height: kSpaceXl),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text('Cancel'),
-                    ),
-                  ),
-                  const SizedBox(width: kSpaceSm),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _creating ? null : _createNote,
-                      child: const Text('Create'),
-                    ),
-                  ),
-                ],
-              ),
-            ],
+class _CoursePill extends StatelessWidget {
+  const _CoursePill({required this.label, required this.selected, required this.onTap});
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? kPrimary : kSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: selected ? kPrimary : kBorder),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.black : kTextPrimary,
+            fontWeight: selected ? FontWeight.w900 : FontWeight.w600,
+            fontSize: 12,
           ),
         ),
       ),
     );
   }
+}
 
-  void _viewNote(Map<String, dynamic> note) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(kRadiusXl)),
-        child: Padding(
-          padding: const EdgeInsets.all(kSpaceLg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                note['title'] ?? 'Note',
-                style: context.h4.copyWith(
-                  fontWeight: FontWeight.w900,
-                  color: kTextPrimary,
+class _NoteCard extends StatelessWidget {
+  const _NoteCard({required this.note, required this.onTap});
+
+  final Map<String, dynamic> note;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = note['title'] ?? 'Untitled';
+    final book = note['bookName'] ?? '';
+    final code = note['courseCode'] ?? 'NOTE';
+    final content = note['content'] ?? '';
+
+    return BounceTap(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kSurface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: kBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: kPrimary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: kPrimary.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    code,
+                    style: const TextStyle(
+                      color: kPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 11,
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    book,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: kTextSecondary, fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Icon(Icons.arrow_forward_ios_rounded, size: 12, color: kTextSecondary),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: kTextPrimary,
               ),
-              const SizedBox(height: kSpaceMd),
-              Text(
-                'Book: ${note['bookName'] ?? ''}',
-                style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              content,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                color: kTextSecondary,
+                height: 1.4,
               ),
-              const SizedBox(height: kSpaceXs),
-              Text(
-                'Course Code: ${note['courseCode'] ?? ''}',
-                style: const TextStyle(color: kTextSecondary),
-              ),
-              const SizedBox(height: kSpaceMd),
-              const Divider(),
-              const SizedBox(height: kSpaceMd),
-              Text(
-                note['content'] ?? '',
-                style: const TextStyle(fontSize: 14, height: 1.7, color: kTextBody),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

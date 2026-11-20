@@ -133,7 +133,7 @@ class _DepartmentManagementScreenState extends State<DepartmentManagementScreen>
           if (student['rollNumber'] != null)
             Text(
               student['rollNumber'],
-              style: const TextStyle(fontSize: 11, color: kTextSecondary),
+              style: TextStyle(fontSize: 11, color: kTextSecondary),
             ),
         ],
       ),
@@ -195,7 +195,7 @@ class _DepartmentManagementScreenState extends State<DepartmentManagementScreen>
                     children: [
                       ...students.map((s) => _buildStudentChip(s, deptId)),
                       if (students.isEmpty)
-                        const Center(
+                        Center(
                           child: Text(
                             'Drag students here',
                             style: TextStyle(color: kTextSecondary, fontStyle: FontStyle.italic),
@@ -281,7 +281,7 @@ class _DepartmentManagementScreenState extends State<DepartmentManagementScreen>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Unassigned',
                           style: TextStyle(fontWeight: FontWeight.w800, color: kTextPrimary, fontSize: 14),
                         ),
