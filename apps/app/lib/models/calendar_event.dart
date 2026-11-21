@@ -24,7 +24,8 @@ class CalendarEvent {
       departmentId: json['departmentId'] as String?,
       title: json['title'] as String,
       kind: json['kind'] as String,
-      startsAt: DateTime.tryParse(json['startsAt'] as String? ?? '') ?? DateTime.now(),
+      startsAt: DateTime.tryParse(json['startsAt'] as String? ?? '') ??
+          DateTime.now(),
       endsAt: json['endsAt'] == null
           ? null
           : DateTime.tryParse(json['endsAt'] as String),

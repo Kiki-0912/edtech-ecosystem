@@ -1,7 +1,7 @@
 import 'package:edtech_app/app.dart';
 import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/theme_controller.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 Future<void> main() async {

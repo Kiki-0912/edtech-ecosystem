@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
 import { getStudentsByCourse, createUser, getUsers } from '../store/db.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireRoles } from '../middleware/auth.js';
 import type { Role } from "../store/db";
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
@@ -99,7 +99,7 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
   // Query: courseId, date
   fastify.get(
     '/excel/export/attendance',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
       const { getAttendanceRecords } = await import('../store/db.js');
       const { courseId, date } = request.query as { courseId?: string; date?: string };
@@ -121,7 +121,7 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
   // Query: courseId, courseCode
   fastify.get(
     '/excel/export/notes',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
       const { getTeacherNotes } = await import('../store/db.js');
       const { courseId, courseCode } = request.query as { courseId?: string; courseCode?: string };

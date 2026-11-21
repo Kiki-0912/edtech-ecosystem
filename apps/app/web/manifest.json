@@ -1,12 +1,12 @@
 {
-    "name": "edtech_app",
-    "short_name": "edtech_app",
+    "name": "EdTech",
+    "short_name": "EdTech",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#FAFAF9",
+    "theme_color": "#FF6B00",
+    "description": "Courses, attendance, schedules, class chat and process-based integrity insights for students, teachers and administrators.",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

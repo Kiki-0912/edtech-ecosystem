@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class EffortScore {
   const EffortScore({
@@ -36,7 +36,8 @@ class EffortScore {
       pasteVolume: json['pasteVolume'] as int,
       aiTabSwitches: json['aiTabSwitches'] as int,
       activeSeconds: json['activeSeconds'] as int,
-      computedAt: DateTime.tryParse(json['computedAt'] as String? ?? '') ?? DateTime.now(),
+      computedAt: DateTime.tryParse(json['computedAt'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 

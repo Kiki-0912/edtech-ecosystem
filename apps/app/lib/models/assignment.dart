@@ -23,9 +23,11 @@ class Assignment {
       courseId: json['courseId'] as String,
       title: json['title'] as String,
       brief: json['brief'] as String,
-      dueAt: DateTime.tryParse(json['dueAt'] as String? ?? '') ?? DateTime.now(),
+      dueAt:
+          DateTime.tryParse(json['dueAt'] as String? ?? '') ?? DateTime.now(),
       status: json['status'] as String,
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 

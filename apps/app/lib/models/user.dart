@@ -27,7 +27,8 @@ class User {
       phone: json['phone'] as String? ?? '',
       role: json['role'] as String,
       courseIds: List<String>.from(json['courseIds'] as List<dynamic>),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
       isPhoneVerified: json['is_phone_verified'] as bool? ?? false,
     );
   }

@@ -1,17 +1,10 @@
-import 'package:edtech_app/theme.dart';
-import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Owns the app's light/dark preference.
+/// Owns the user's light / dark / system preference and persists it.
 ///
-/// The neutral colour tokens in `theme.dart` are palette-backed getters rather
-/// than `Theme.of(context)` lookups, so flipping the mode has to do two things:
-///
-///  1. swap [currentPalette] (done silently, in [syncPalette]);
-///  2. notify listeners so every screen re-runs `build` and re-reads them.
-///
-/// Listeners are wired up by [ThemedScope], which wraps every route.
+/// Colours come from `Theme.of(context)` (see `lib/ui/`), so switching modes
+/// only needs `MaterialApp.themeMode` to change — no manual rebuild plumbing.
 class ThemeController extends ChangeNotifier {
   ThemeController._();
 
@@ -20,31 +13,15 @@ class ThemeController extends ChangeNotifier {
   static final ThemeController instance = ThemeController._();
 
   ThemeMode _mode = ThemeMode.system;
-  Brightness _platformBrightness = Brightness.light;
 
   ThemeMode get mode => _mode;
 
-  /// The palette the UI should currently be rendering with.
-  Brightness get effectiveBrightness {
-    switch (_mode) {
-      case ThemeMode.system:
-        return _platformBrightness;
-      case ThemeMode.light:
-        return Brightness.light;
-      case ThemeMode.dark:
-        return Brightness.dark;
-    }
-  }
-
-  bool get isDark => effectiveBrightness == Brightness.dark;
-
-  /// Restores the saved preference. Call once at startup, before the first
-  /// frame, so the app never flashes the wrong theme.
+  /// Restores the saved preference. Call once before the first frame so the
+  /// app never flashes the wrong theme.
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final stored = prefs.getString(_prefsKey);
-      _mode = switch (stored) {
+      _mode = switch (prefs.getString(_prefsKey)) {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
@@ -52,65 +29,18 @@ class ThemeController extends ChangeNotifier {
     } catch (_) {
       _mode = ThemeMode.system;
     }
-    syncPalette();
     notifyListeners();
   }
-
-  /// Swaps the active palette. Returns `true` when it actually changed, so the
-  /// caller can schedule a rebuild — notifying listeners directly from
-  /// `didChangeDependencies` would throw.
-  bool syncPalette({Brightness? platformBrightness}) {
-    if (platformBrightness != null) {
-      _platformBrightness = platformBrightness;
-    }
-    final target = isDark ? kDarkPalette : kLightPalette;
-    if (identical(currentPalette, target)) return false;
-    setAppPalette(target);
-    return true;
-  }
-
-  /// Re-reads the palette everywhere. Safe to call after the current frame.
-  void notifyPaletteChanged() => notifyListeners();
 
   Future<void> setMode(ThemeMode mode) async {
     if (_mode == mode) return;
     _mode = mode;
-    syncPalette();
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _prefsKey,
-        switch (mode) {
-          ThemeMode.light => 'light',
-          ThemeMode.dark => 'dark',
-          ThemeMode.system => 'system',
-        },
-      );
+      await prefs.setString(_prefsKey, mode.name);
     } catch (_) {
-      // Preference is a nicety; the in-memory mode already applied.
+      // The preference is a nicety; the in-memory mode already applied.
     }
-  }
-
-  /// Convenience for the drawer switch: off → system, on → dark.
-  Future<void> setDark(bool enabled) =>
-      setMode(enabled ? ThemeMode.dark : ThemeMode.system);
-}
-
-/// Wraps every route so it re-runs `build` when the palette flips.
-///
-/// The child is produced by [buildChild] on each rebuild rather than held as a
-/// field: an identical child instance would be short-circuited by the element
-/// tree and would never pick up the new colours.
-class ThemedScope extends StatelessWidget {
-  const ThemedScope({super.key, required this.buildChild});
-
-  final Widget Function(BuildContext context) buildChild;
-
-  @override
-  Widget build(BuildContext context) {
-    // Registers the dependency that makes this scope rebuild on a mode change.
-    context.watch<ThemeController>();
-    return buildChild(context);
   }
 }

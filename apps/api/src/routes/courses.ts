@@ -159,9 +159,20 @@ export async function courseRoutes(app: FastifyInstance) {
       return fail(reply, 404, "ASSIGNMENT_NOT_FOUND", "Assignment not found");
     }
 
-    const studentId = request.body?.studentId;
+    // Students can only submit their own work; staff may submit on a
+    // student's behalf by passing studentId.
+    const caller = (request as { user?: { id: string; role?: string } }).user;
+    const studentId =
+      caller?.role === "student" ? caller.id : request.body?.studentId;
     if (!studentId) {
       return fail(reply, 400, "INVALID_BODY", "studentId is required");
+    }
+    if (
+      caller?.role === "student" &&
+      request.body?.studentId &&
+      request.body.studentId !== caller.id
+    ) {
+      return fail(reply, 403, "FORBIDDEN", "Students can only submit their own work");
     }
 
     const student = await getUser(studentId);

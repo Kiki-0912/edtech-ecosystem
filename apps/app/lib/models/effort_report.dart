@@ -24,10 +24,12 @@ class IntegrityReport {
       submissionId: json['submissionId'] as String?,
       assignmentId: json['assignmentId'] as String,
       studentId: json['studentId'] as String,
-      effortScore: EffortScore.fromJson(json['effortScore'] as Map<String, dynamic>),
+      effortScore:
+          EffortScore.fromJson(json['effortScore'] as Map<String, dynamic>),
       flags: List<String>.from(json['flags'] as List<dynamic>),
       replayAvailable: json['replayAvailable'] as bool,
-      generatedAt: DateTime.tryParse(json['generatedAt'] as String? ?? '') ?? DateTime.now(),
+      generatedAt: DateTime.tryParse(json['generatedAt'] as String? ?? '') ??
+          DateTime.now(),
     );
   }
 

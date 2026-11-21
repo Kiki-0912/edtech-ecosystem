@@ -33,7 +33,8 @@ class Course {
       teacherId: json['teacherId'] as String,
       studentIds: List<String>.from(json['studentIds'] as List<dynamic>),
       term: json['term'] as String,
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
+          DateTime.now(),
       teacherName: json['teacherName'] as String?,
       openAssignmentCount: json['openAssignmentCount'] as int?,
     );

@@ -174,11 +174,13 @@ export async function classroomRoutes(app: FastifyInstance) {
       return fail(reply, 404, "CHANNEL_NOT_FOUND", "Channel not found");
     }
 
-    const authorId = request.body?.authorId;
+    // The author is always the signed-in caller; a body-supplied authorId
+    // could otherwise be used to post as someone else.
+    const authorId = (request as { userId?: string }).userId;
     const body = request.body?.body?.trim();
 
     if (!authorId || !body) {
-      return fail(reply, 400, "INVALID_BODY", "authorId and body are required");
+      return fail(reply, 400, "INVALID_BODY", "body is required");
     }
 
     if (!channel.memberIds.includes(authorId)) {

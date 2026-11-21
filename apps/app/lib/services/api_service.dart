@@ -14,6 +14,17 @@ import 'package:edtech_app/models/submission.dart';
 import 'package:edtech_app/services/offline_client.dart';
 import 'package:http/http.dart' as http;
 
+/// Non-2xx API response. [message] is the API's error message when available.
+class ApiException implements Exception {
+  ApiException(this.statusCode, this.message);
+
+  final int statusCode;
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
 class ApiService {
   ApiService._internal();
   static final ApiService instance = ApiService._internal();
@@ -23,8 +34,22 @@ class ApiService {
   /// Included on every authenticated request.
   String? token;
 
-  final http.Client _client =
-      AppConfig.offlineMode ? OfflineClient() : http.Client();
+  final http.Client _httpClient = http.Client();
+  final http.Client _offlineClient = OfflineClient();
+
+  /// Called when an authenticated request returns 401 (expired/invalid
+  /// session). Wired to `AuthProvider.logout` by the app.
+  void Function()? onUnauthorized;
+
+  bool get isOffline => _offlineOverride ?? AppConfig.offlineMode;
+
+  /// Optional test hook: force online/offline regardless of the build config.
+  bool? _offlineOverride;
+  set offlineMode(bool? value) => _offlineOverride = value;
+
+  http.Client get _client => (_offlineOverride ?? AppConfig.offlineMode)
+      ? _offlineClient
+      : _httpClient;
 
   Map<String, String> _authHeaders() {
     final headers = <String, String>{'Content-Type': 'application/json'};
@@ -39,13 +64,18 @@ class ApiService {
      ============================================ */
   Future<List<Course>> getCourses() async {
     try {
-      final response = await _client.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/courses'),
-        headers: _authHeaders(),
-      ).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/v1/courses'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 8));
       _throwOnError(response);
-      final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-      return data.map((item) => Course.fromJson(item as Map<String, dynamic>)).toList();
+      final List<dynamic> data =
+          jsonDecode(response.body)['data'] as List<dynamic>;
+      return data
+          .map((item) => Course.fromJson(item as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return _demoCourses;
     }
@@ -56,15 +86,18 @@ class ApiService {
      ============================================ */
   Future<College?> getCollege() async {
     try {
-      final response = await _client.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/college'),
-        headers: _authHeaders(),
-      ).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(
+            Uri.parse('${AppConfig.apiBaseUrl}/api/v1/college'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 8));
       if (response.statusCode == 404) {
         return null;
       }
       _throwOnError(response);
-      return College.fromJson(jsonDecode(response.body)['data'] as Map<String, dynamic>);
+      return College.fromJson(
+          jsonDecode(response.body)['data'] as Map<String, dynamic>);
     } catch (_) {
       return null;
     }
@@ -75,13 +108,19 @@ class ApiService {
      ============================================ */
   Future<List<Assignment>> getAssignments(String courseId) async {
     try {
-      final response = await _client.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/courses/$courseId/assignments'),
-        headers: _authHeaders(),
-      ).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/v1/courses/$courseId/assignments'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 8));
       _throwOnError(response);
-      final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-      return data.map((item) => Assignment.fromJson(item as Map<String, dynamic>)).toList();
+      final List<dynamic> data =
+          jsonDecode(response.body)['data'] as List<dynamic>;
+      return data
+          .map((item) => Assignment.fromJson(item as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return _demoAssignments;
     }
@@ -89,12 +128,16 @@ class ApiService {
 
   Future<Assignment> getAssignment(String assignmentId) async {
     try {
-      final response = await _client.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId'),
-        headers: _authHeaders(),
-      ).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 8));
       _throwOnError(response);
-      return Assignment.fromJson(jsonDecode(response.body)['data'] as Map<String, dynamic>);
+      return Assignment.fromJson(
+          jsonDecode(response.body)['data'] as Map<String, dynamic>);
     } catch (_) {
       return _demoAssignments.first;
     }
@@ -102,19 +145,37 @@ class ApiService {
 
   Future<List<Map<String, dynamic>>> getRoster(String assignmentId) async {
     try {
-      final response = await _client.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId/roster'),
-        headers: _authHeaders(),
-      ).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId/roster'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 8));
       _throwOnError(response);
       return List<Map<String, dynamic>>.from(
         jsonDecode(response.body)['data']['roster'] as List<dynamic>,
       );
     } catch (_) {
       return [
-        {'studentId': 'u-student-1', 'displayName': 'Aeliya', 'status': 'submitted', 'score': 84},
-        {'studentId': 'u-student-2', 'displayName': 'Sameer', 'status': 'submitted', 'score': 71},
-        {'studentId': 'u-student-3', 'displayName': 'Saifi', 'status': 'pending', 'score': 0},
+        {
+          'studentId': 'u-student-1',
+          'displayName': 'Aeliya',
+          'status': 'submitted',
+          'score': 84
+        },
+        {
+          'studentId': 'u-student-2',
+          'displayName': 'Sameer',
+          'status': 'submitted',
+          'score': 71
+        },
+        {
+          'studentId': 'u-student-3',
+          'displayName': 'Saifi',
+          'status': 'pending',
+          'score': 0
+        },
       ];
     }
   }
@@ -125,7 +186,8 @@ class ApiService {
     List<Attachment> attachments = const [],
   }) async {
     final response = await _client.post(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId/submissions'),
+      Uri.parse(
+          '${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId/submissions'),
       headers: _authHeaders(),
       body: jsonEncode(<String, dynamic>{
         'studentId': studentId,
@@ -133,7 +195,8 @@ class ApiService {
       }),
     );
     _throwOnError(response);
-    return Submission.fromJson(jsonDecode(response.body)['data'] as Map<String, dynamic>);
+    return Submission.fromJson(
+        jsonDecode(response.body)['data'] as Map<String, dynamic>);
   }
 
   /* ============================================
@@ -141,19 +204,24 @@ class ApiService {
      ============================================ */
 
   Future<List<Map<String, dynamic>>> getStudents() async {
-    final response = await _client.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/students'),
-      headers: _authHeaders(),
-    ).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(
+          Uri.parse('${AppConfig.apiBaseUrl}/api/v1/students'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(jsonDecode(response.body)['data'] as List<dynamic>);
+    return List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>);
   }
 
   Future<Map<String, dynamic>> getStudent(String studentId) async {
-    final response = await _client.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/students/$studentId'),
-      headers: _authHeaders(),
-    ).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(
+          Uri.parse('${AppConfig.apiBaseUrl}/api/v1/students/$studentId'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
     return jsonDecode(response.body)['data'] as Map<String, dynamic>;
   }
@@ -209,13 +277,18 @@ class ApiService {
     _throwOnError(response);
   }
 
-  Future<List<Map<String, dynamic>>> getStudentDepartments(String studentId) async {
-    final response = await _client.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/students/$studentId/departments'),
-      headers: _authHeaders(),
-    ).timeout(const Duration(seconds: 8));
+  Future<List<Map<String, dynamic>>> getStudentDepartments(
+      String studentId) async {
+    final response = await _client
+        .get(
+          Uri.parse(
+              '${AppConfig.apiBaseUrl}/api/v1/students/$studentId/departments'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(jsonDecode(response.body)['data'] as List<dynamic>);
+    return List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>);
   }
 
   Future<Map<String, dynamic>> enrollStudentInDepartment({
@@ -223,7 +296,8 @@ class ApiService {
     required String departmentId,
   }) async {
     final response = await _client.post(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/students/$studentId/departments'),
+      Uri.parse(
+          '${AppConfig.apiBaseUrl}/api/v1/students/$studentId/departments'),
       headers: _authHeaders(),
       body: jsonEncode(<String, String>{'departmentId': departmentId}),
     );
@@ -244,13 +318,18 @@ class ApiService {
     _throwOnError(response);
   }
 
-  Future<List<Map<String, dynamic>>> getStudentsByCourse(String courseId) async {
-    final response = await _client.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/courses/$courseId/students'),
-      headers: _authHeaders(),
-    ).timeout(const Duration(seconds: 8));
+  Future<List<Map<String, dynamic>>> getStudentsByCourse(
+      String courseId) async {
+    final response = await _client
+        .get(
+          Uri.parse(
+              '${AppConfig.apiBaseUrl}/api/v1/courses/$courseId/students'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(jsonDecode(response.body)['data'] as List<dynamic>);
+    return List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>);
   }
 
   /* ============================================
@@ -264,11 +343,17 @@ class ApiService {
     final query = <String, String>{};
     if (courseId != null) query['courseId'] = courseId;
     if (date != null) query['date'] = date;
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/attendance').replace(queryParameters: query);
-    final response = await _client.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 8));
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/attendance')
+        .replace(queryParameters: query);
+    final response = await _client
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-    return data.map((item) => AttendanceRecord.fromJson(item as Map<String, dynamic>)).toList();
+    final List<dynamic> data =
+        jsonDecode(response.body)['data'] as List<dynamic>;
+    return data
+        .map((item) => AttendanceRecord.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<AttendanceRecord> markAttendance({
@@ -290,7 +375,8 @@ class ApiService {
       }),
     );
     _throwOnError(response);
-    return AttendanceRecord.fromJson(jsonDecode(response.body)['data'] as Map<String, dynamic>);
+    return AttendanceRecord.fromJson(
+        jsonDecode(response.body)['data'] as Map<String, dynamic>);
   }
 
   Future<List<AttendanceRecord>> bulkMarkAttendance({
@@ -308,8 +394,11 @@ class ApiService {
       }),
     );
     _throwOnError(response);
-    final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-    return data.map((item) => AttendanceRecord.fromJson(item as Map<String, dynamic>)).toList();
+    final List<dynamic> data =
+        jsonDecode(response.body)['data'] as List<dynamic>;
+    return data
+        .map((item) => AttendanceRecord.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> getCourseStudentsWithAttendance({
@@ -318,10 +407,15 @@ class ApiService {
   }) async {
     final query = <String, String>{};
     if (date != null) query['date'] = date;
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/attendance/course/$courseId/students').replace(queryParameters: query);
-    final response = await _client.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 8));
+    final uri = Uri.parse(
+            '${AppConfig.apiBaseUrl}/api/v1/attendance/course/$courseId/students')
+        .replace(queryParameters: query);
+    final response = await _client
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(jsonDecode(response.body)['data'] as List<dynamic>);
+    return List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>);
   }
 
   /* ============================================
@@ -335,11 +429,17 @@ class ApiService {
     final query = <String, String>{};
     if (courseId != null) query['courseId'] = courseId;
     if (courseCode != null) query['courseCode'] = courseCode;
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/notes').replace(queryParameters: query);
-    final response = await _client.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 8));
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/notes')
+        .replace(queryParameters: query);
+    final response = await _client
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-    return data.map((item) => TeacherNote.fromJson(item as Map<String, dynamic>)).toList();
+    final List<dynamic> data =
+        jsonDecode(response.body)['data'] as List<dynamic>;
+    return data
+        .map((item) => TeacherNote.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<TeacherNote> createTeacherNote({
@@ -361,7 +461,8 @@ class ApiService {
       }),
     );
     _throwOnError(response);
-    return TeacherNote.fromJson(jsonDecode(response.body)['data'] as Map<String, dynamic>);
+    return TeacherNote.fromJson(
+        jsonDecode(response.body)['data'] as Map<String, dynamic>);
   }
 
   Future<TeacherNote> updateTeacherNote({
@@ -382,7 +483,8 @@ class ApiService {
       }),
     );
     _throwOnError(response);
-    return TeacherNote.fromJson(jsonDecode(response.body)['data'] as Map<String, dynamic>);
+    return TeacherNote.fromJson(
+        jsonDecode(response.body)['data'] as Map<String, dynamic>);
   }
 
   Future<void> deleteTeacherNote(String id) async {
@@ -398,21 +500,84 @@ class ApiService {
      ============================================ */
 
   Future<List<Map<String, dynamic>>> getDepartments() async {
-    final response = await _client.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/departments'),
-      headers: _authHeaders(),
-    ).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(
+          Uri.parse('${AppConfig.apiBaseUrl}/api/v1/departments'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(jsonDecode(response.body)['data'] as List<dynamic>);
+    return List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>);
   }
 
-  Future<List<Map<String, dynamic>>> getStudentsByDepartment(String departmentId) async {
-    final response = await _client.get(
-      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/departments/$departmentId/students'),
-      headers: _authHeaders(),
-    ).timeout(const Duration(seconds: 8));
+  Future<Map<String, dynamic>> createDepartment({
+    required String name,
+    required String code,
+    required String category,
+    required int durationMonths,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('${AppConfig.apiBaseUrl}/api/v1/departments'),
+          headers: _authHeaders(),
+          body: jsonEncode({
+            'name': name,
+            'code': code,
+            'category': category,
+            'durationMonths': durationMonths,
+          }),
+        )
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(jsonDecode(response.body)['data'] as List<dynamic>);
+    return jsonDecode(response.body)['data'] as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> updateDepartment({
+    required String id,
+    String? name,
+    String? code,
+    String? category,
+    int? durationMonths,
+  }) async {
+    final response = await _client
+        .put(
+          Uri.parse('${AppConfig.apiBaseUrl}/api/v1/departments/$id'),
+          headers: _authHeaders(),
+          body: jsonEncode({
+            if (name != null) 'name': name,
+            if (code != null) 'code': code,
+            if (category != null) 'category': category,
+            if (durationMonths != null) 'durationMonths': durationMonths,
+          }),
+        )
+        .timeout(const Duration(seconds: 8));
+    _throwOnError(response);
+    return jsonDecode(response.body)['data'] as Map<String, dynamic>;
+  }
+
+  Future<void> deleteDepartment(String id) async {
+    final response = await _client
+        .delete(
+          Uri.parse('${AppConfig.apiBaseUrl}/api/v1/departments/$id'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
+    _throwOnError(response);
+  }
+
+  Future<List<Map<String, dynamic>>> getStudentsByDepartment(
+      String departmentId) async {
+    final response = await _client
+        .get(
+          Uri.parse(
+              '${AppConfig.apiBaseUrl}/api/v1/departments/$departmentId/students'),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
+    _throwOnError(response);
+    return List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>);
   }
 
   /* ============================================
@@ -438,28 +603,41 @@ class ApiService {
   Future<Map<String, dynamic>> exportStudentsToExcel({String? courseId}) async {
     final query = <String, String>{};
     if (courseId != null) query['courseId'] = courseId;
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/excel/export/students').replace(queryParameters: query);
-    final response = await _client.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 8));
+    final uri =
+        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/excel/export/students')
+            .replace(queryParameters: query);
+    final response = await _client
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
     return jsonDecode(response.body)['data'] as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> exportAttendanceToExcel({String? courseId, String? date}) async {
+  Future<Map<String, dynamic>> exportAttendanceToExcel(
+      {String? courseId, String? date}) async {
     final query = <String, String>{};
     if (courseId != null) query['courseId'] = courseId;
     if (date != null) query['date'] = date;
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/excel/export/attendance').replace(queryParameters: query);
-    final response = await _client.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 8));
+    final uri =
+        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/excel/export/attendance')
+            .replace(queryParameters: query);
+    final response = await _client
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
     return jsonDecode(response.body)['data'] as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> exportNotesToExcel({String? courseId, String? courseCode}) async {
+  Future<Map<String, dynamic>> exportNotesToExcel(
+      {String? courseId, String? courseCode}) async {
     final query = <String, String>{};
     if (courseId != null) query['courseId'] = courseId;
     if (courseCode != null) query['courseCode'] = courseCode;
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/excel/export/notes').replace(queryParameters: query);
-    final response = await _client.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 8));
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/excel/export/notes')
+        .replace(queryParameters: query);
+    final response = await _client
+        .get(uri, headers: _authHeaders())
+        .timeout(const Duration(seconds: 8));
     _throwOnError(response);
     return jsonDecode(response.body)['data'] as Map<String, dynamic>;
   }
@@ -478,12 +656,14 @@ class ApiService {
     String assignmentId,
     String studentId,
   ) async {
-    final response = await _client.get(
-      Uri.parse(
-        '${AppConfig.apiBaseUrl}/api/v1/integrity/$assignmentId/$studentId',
-      ),
-      headers: _authHeaders(),
-    ).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(
+          Uri.parse(
+            '${AppConfig.apiBaseUrl}/api/v1/integrity/$assignmentId/$studentId',
+          ),
+          headers: _authHeaders(),
+        )
+        .timeout(const Duration(seconds: 8));
     if (response.statusCode == 404) {
       return null;
     }
@@ -503,10 +683,15 @@ class ApiService {
       if (departmentId != null) query['departmentId'] = departmentId;
       final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/calendar')
           .replace(queryParameters: query.isEmpty ? null : query);
-      final response = await _client.get(uri, headers: _authHeaders()).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(uri, headers: _authHeaders())
+          .timeout(const Duration(seconds: 8));
       _throwOnError(response);
-      final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-      return data.map((item) => CalendarEvent.fromJson(item as Map<String, dynamic>)).toList();
+      final List<dynamic> data =
+          jsonDecode(response.body)['data'] as List<dynamic>;
+      return data
+          .map((item) => CalendarEvent.fromJson(item as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return _demoCalendar;
     }
@@ -575,17 +760,33 @@ class ApiService {
 
   Future<List<ChatMessage>> getMessages(String channelId) async {
     try {
-      final response = await _client.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/channels/$channelId/messages'),
-        headers: _authHeaders(),
-      ).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/v1/channels/$channelId/messages'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 8));
       _throwOnError(response);
-      final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-      return data.map((item) => ChatMessage.fromJson(item as Map<String, dynamic>)).toList();
+      final List<dynamic> data =
+          jsonDecode(response.body)['data'] as List<dynamic>;
+      return data
+          .map((item) => ChatMessage.fromJson(item as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return [
-        ChatMessage(id: 'm1', channelId: channelId, authorId: 'u-teacher-1', body: 'Welcome to the course!', sentAt: DateTime.now().subtract(const Duration(hours: 2))),
-        ChatMessage(id: 'm2', channelId: channelId, authorId: 'u-student-1', body: 'Thanks, excited to start.', sentAt: DateTime.now().subtract(const Duration(hours: 1))),
+        ChatMessage(
+            id: 'm1',
+            channelId: channelId,
+            authorId: 'u-teacher-1',
+            body: 'Welcome to the course!',
+            sentAt: DateTime.now().subtract(const Duration(hours: 2))),
+        ChatMessage(
+            id: 'm2',
+            channelId: channelId,
+            authorId: 'u-student-1',
+            body: 'Thanks, excited to start.',
+            sentAt: DateTime.now().subtract(const Duration(hours: 1))),
       ];
     }
   }
@@ -604,22 +805,39 @@ class ApiService {
       }),
     );
     _throwOnError(response);
-    return ChatMessage.fromJson(jsonDecode(response.body)['data'] as Map<String, dynamic>);
+    return ChatMessage.fromJson(
+        jsonDecode(response.body)['data'] as Map<String, dynamic>);
   }
 
   Future<List<Channel>> getChannels(String courseId) async {
     try {
-      final response = await _client.get(
-        Uri.parse('${AppConfig.apiBaseUrl}/api/v1/courses/$courseId/channels'),
-        headers: _authHeaders(),
-      ).timeout(const Duration(seconds: 8));
+      final response = await _client
+          .get(
+            Uri.parse(
+                '${AppConfig.apiBaseUrl}/api/v1/courses/$courseId/channels'),
+            headers: _authHeaders(),
+          )
+          .timeout(const Duration(seconds: 8));
       _throwOnError(response);
-      final List<dynamic> data = jsonDecode(response.body)['data'] as List<dynamic>;
-      return data.map((item) => Channel.fromJson(item as Map<String, dynamic>)).toList();
+      final List<dynamic> data =
+          jsonDecode(response.body)['data'] as List<dynamic>;
+      return data
+          .map((item) => Channel.fromJson(item as Map<String, dynamic>))
+          .toList();
     } catch (_) {
       return [
-        Channel(id: 'ch-general', courseId: courseId, name: 'General', kind: 'general', memberIds: const ['u-teacher-1', 'u-student-1']),
-        Channel(id: 'ch-announce', courseId: courseId, name: 'Announcements', kind: 'announcement', memberIds: const ['u-teacher-1', 'u-student-1']),
+        Channel(
+            id: 'ch-general',
+            courseId: courseId,
+            name: 'General',
+            kind: 'general',
+            memberIds: const ['u-teacher-1', 'u-student-1']),
+        Channel(
+            id: 'ch-announce',
+            courseId: courseId,
+            name: 'Announcements',
+            kind: 'announcement',
+            memberIds: const ['u-teacher-1', 'u-student-1']),
       ];
     }
   }
@@ -727,9 +945,22 @@ class ApiService {
   }
 
   void _throwOnError(http.Response response) {
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw Exception('API error ${response.statusCode}: ${response.body}');
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+    if (response.statusCode == 401 &&
+        !(response.request?.url.path ?? '').contains('/auth/')) {
+      onUnauthorized?.call();
     }
+    // Surface the API's `{ error: { message } }` envelope when present.
+    String message = 'Request failed (${response.statusCode})';
+    try {
+      final body = jsonDecode(response.body);
+      final error = body is Map ? body['error'] : null;
+      final apiMessage = error is Map ? error['message'] : null;
+      if (apiMessage is String && apiMessage.isNotEmpty) message = apiMessage;
+    } catch (_) {
+      // Non-JSON body: keep the generic message.
+    }
+    throw ApiException(response.statusCode, message);
   }
 
   static final List<Course> _demoCourses = [

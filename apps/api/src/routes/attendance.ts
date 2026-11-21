@@ -5,7 +5,7 @@ import {
   upsertAttendanceRecord,
   getStudentsByCourse,
 } from '../store/db.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireRoles } from '../middleware/auth.js';
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
 
@@ -39,7 +39,7 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/attendance - create or update attendance (teacher/admin)
   fastify.post(
     '/attendance',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
@@ -65,7 +65,7 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/attendance/bulk - bulk mark attendance for a course/date
   fastify.post(
     '/attendance/bulk',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;

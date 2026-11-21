@@ -35,8 +35,21 @@ class OfflineStore {
   List<Map<String, dynamic>> _calendar = [];
   List<Map<String, dynamic>> _integrity = [];
 
-  Future<void> _ensureLoaded() async {
-    if (_loaded) return;
+  Future<void>? _loadFuture;
+
+  /// Single-flight loader.
+  ///
+  /// Screens fetch calendar/courses/attendance in parallel, so several
+  /// requests hit this at once. Without memoising the in-flight future, a
+  /// late caller re-reads the prefs while an earlier one is still mid-persist
+  /// and sees half a store (e.g. students written, attendance not yet),
+  /// skips the seed and latches `_loaded` with empty data.
+  Future<void> _ensureLoaded() {
+    if (_loaded) return Future<void>.value();
+    return _loadFuture ??= _load();
+  }
+
+  Future<void> _load() async {
     _prefs = await SharedPreferences.getInstance();
     _students = _read(_studentsKey);
     _departments = _read(_departmentsKey);
@@ -295,25 +308,38 @@ class OfflineStore {
       },
     ];
 
-    _submissions = [];
+    _submissions = [
+      for (final (student, effort) in [
+        ('u-student-1', 79),
+        ('u-student-2', 68)
+      ])
+        {
+          'id': 'sub-a1-$student',
+          'assignmentId': 'a1',
+          'studentId': student,
+          'status': 'submitted',
+          'submittedAt': '2026-09-10T10:00:00.000Z',
+          'attachments': <Map<String, dynamic>>[],
+          'grade': null,
+          'effortScore': effort,
+        },
+    ];
     _messages = [
       {
         'id': 'm-1',
         'channelId': 'ch-general',
         'authorId': 'u-teacher-1',
         'body': 'Welcome to the course!',
-        'sentAt': DateTime.now()
-            .subtract(const Duration(hours: 2))
-            .toIso8601String(),
+        'sentAt':
+            DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
       },
       {
         'id': 'm-2',
         'channelId': 'ch-general',
         'authorId': 'u-student-1',
         'body': 'Thanks, excited to start.',
-        'sentAt': DateTime.now()
-            .subtract(const Duration(hours: 1))
-            .toIso8601String(),
+        'sentAt':
+            DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
       },
     ];
 
@@ -321,9 +347,8 @@ class OfflineStore {
   }
 
   void _seedCalendar() {
-    String day(int offset) => DateTime.now()
-        .add(Duration(days: offset))
-        .toIso8601String();
+    String day(int offset) =>
+        DateTime.now().add(Duration(days: offset)).toIso8601String();
 
     _calendar = [
       {
@@ -418,8 +443,9 @@ class OfflineStore {
   Future<List<Map<String, dynamic>>> getStudents() async {
     await _ensureLoaded();
     final rows = _students.map((s) => Map<String, dynamic>.from(s)).toList();
-    rows.sort((a, b) =>
-        (a['displayName'] ?? '').toString().compareTo((b['displayName'] ?? '').toString()));
+    rows.sort((a, b) => (a['displayName'] ?? '')
+        .toString()
+        .compareTo((b['displayName'] ?? '').toString()));
     return rows;
   }
 
@@ -451,7 +477,8 @@ class OfflineStore {
       'phone': phone,
       'role': 'student',
       'courseIds': courseId == null ? <String>[] : [courseId],
-      'rollNumber': 'STU-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
+      'rollNumber':
+          'STU-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}',
       'isPhoneVerified': false,
       'createdAt': DateTime.now().toIso8601String(),
     };
@@ -505,8 +532,56 @@ class OfflineStore {
   Future<List<Map<String, dynamic>>> getDepartments() async {
     await _ensureLoaded();
     final rows = _departments.map((d) => Map<String, dynamic>.from(d)).toList();
-    rows.sort((a, b) => (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+    rows.sort((a, b) =>
+        (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
     return rows;
+  }
+
+  Future<Map<String, dynamic>> createDepartment({
+    required String name,
+    required String code,
+    required String category,
+    required int durationMonths,
+  }) async {
+    await _ensureLoaded();
+    final department = <String, dynamic>{
+      'id': _id('dept'),
+      'collegeId': 'col-cttc',
+      'name': name,
+      'code': code,
+      'category': category,
+      'durationMonths': durationMonths,
+      'createdAt': DateTime.now().toIso8601String(),
+    };
+    _departments.add(department);
+    await _persistAll();
+    return Map<String, dynamic>.from(department);
+  }
+
+  Future<Map<String, dynamic>?> updateDepartment(
+      String id, Map<String, dynamic> changes) async {
+    await _ensureLoaded();
+    final index = _departments.indexWhere((d) => d['id'] == id);
+    if (index < 0) return null;
+    const editable = {'name', 'code', 'category', 'durationMonths'};
+    _departments[index] = {
+      ..._departments[index],
+      for (final e in changes.entries)
+        if (editable.contains(e.key) && e.value != null) e.key: e.value,
+    };
+    await _persistAll();
+    return Map<String, dynamic>.from(_departments[index]);
+  }
+
+  /// Removes the department and its enrolments. Returns false if missing.
+  Future<bool> deleteDepartment(String id) async {
+    await _ensureLoaded();
+    final before = _departments.length;
+    _departments.removeWhere((d) => d['id'] == id);
+    if (_departments.length == before) return false;
+    _enrollments.removeWhere((e) => e['departmentId'] == id);
+    await _persistAll();
+    return true;
   }
 
   Future<List<Map<String, dynamic>>> getStudentsByDepartment(
@@ -568,10 +643,13 @@ class OfflineStore {
   Future<List<Map<String, dynamic>>> getStudentsByCourse(
       String courseId) async {
     await _ensureLoaded();
-    return _students.where((s) {
-      final ids = List<dynamic>.from(s['courseIds'] as List? ?? const []);
-      return ids.contains(courseId);
-    }).map((s) => Map<String, dynamic>.from(s)).toList();
+    return _students
+        .where((s) {
+          final ids = List<dynamic>.from(s['courseIds'] as List? ?? const []);
+          return ids.contains(courseId);
+        })
+        .map((s) => Map<String, dynamic>.from(s))
+        .toList();
   }
 
   /* ============================================
@@ -583,12 +661,16 @@ class OfflineStore {
     String? date,
   }) async {
     await _ensureLoaded();
-    var rows = _attendance.where((r) {
-      if (courseId != null && r['courseId'] != courseId) return false;
-      if (date != null && r['date'] != date) return false;
-      return true;
-    }).map((r) => Map<String, dynamic>.from(r)).toList();
-    rows.sort((a, b) => (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
+    final rows = _attendance
+        .where((r) {
+          if (courseId != null && r['courseId'] != courseId) return false;
+          if (date != null && r['date'] != date) return false;
+          return true;
+        })
+        .map((r) => Map<String, dynamic>.from(r))
+        .toList();
+    rows.sort((a, b) =>
+        (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
     return rows;
   }
 
@@ -601,12 +683,14 @@ class OfflineStore {
     String markedBy = 'u-teacher-1',
   }) async {
     await _ensureLoaded();
-    final existing = _attendance.where(
-      (r) =>
-          r['courseId'] == courseId &&
-          r['studentId'] == studentId &&
-          r['date'] == date,
-    ).toList();
+    final existing = _attendance
+        .where(
+          (r) =>
+              r['courseId'] == courseId &&
+              r['studentId'] == studentId &&
+              r['date'] == date,
+        )
+        .toList();
     if (existing.isNotEmpty) {
       final row = existing.first;
       row['status'] = status;
@@ -659,7 +743,8 @@ class OfflineStore {
       (r) => r['courseId'] == courseId && r['date'] == effectiveDate,
     );
     return students.map((student) {
-      final record = records.where((r) => r['studentId'] == student['id']).toList();
+      final record =
+          records.where((r) => r['studentId'] == student['id']).toList();
       return <String, dynamic>{
         ...student,
         'status': record.isNotEmpty ? record.first['status'] : 'absent',
@@ -678,19 +763,23 @@ class OfflineStore {
     String? courseCode,
   }) async {
     await _ensureLoaded();
-    var rows = _notes.where((n) {
-      if (courseId != null && n['courseId'] != courseId) return false;
-      if (courseCode != null &&
-          !(n['courseCode'] ?? '')
-              .toString()
-              .toLowerCase()
-              .contains(courseCode.toLowerCase())) {
-        return false;
-      }
-      return true;
-    }).map((n) => Map<String, dynamic>.from(n)).toList();
-    rows.sort((a, b) =>
-        (b['createdAt'] ?? '').toString().compareTo((a['createdAt'] ?? '').toString()));
+    final rows = _notes
+        .where((n) {
+          if (courseId != null && n['courseId'] != courseId) return false;
+          if (courseCode != null &&
+              !(n['courseCode'] ?? '')
+                  .toString()
+                  .toLowerCase()
+                  .contains(courseCode.toLowerCase())) {
+            return false;
+          }
+          return true;
+        })
+        .map((n) => Map<String, dynamic>.from(n))
+        .toList();
+    rows.sort((a, b) => (b['createdAt'] ?? '')
+        .toString()
+        .compareTo((a['createdAt'] ?? '').toString()));
     return rows;
   }
 
@@ -756,15 +845,19 @@ class OfflineStore {
     String? courseId,
   }) async {
     await _ensureLoaded();
-    final rows = _calendar.where((e) {
-      if (departmentId != null && e['departmentId'] != departmentId) {
-        return false;
-      }
-      if (courseId != null && e['courseId'] != courseId) return false;
-      return true;
-    }).map((e) => Map<String, dynamic>.from(e)).toList();
-    rows.sort((a, b) =>
-        (a['startsAt'] ?? '').toString().compareTo((b['startsAt'] ?? '').toString()));
+    final rows = _calendar
+        .where((e) {
+          if (departmentId != null && e['departmentId'] != departmentId) {
+            return false;
+          }
+          if (courseId != null && e['courseId'] != courseId) return false;
+          return true;
+        })
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    rows.sort((a, b) => (a['startsAt'] ?? '')
+        .toString()
+        .compareTo((b['startsAt'] ?? '').toString()));
     return rows;
   }
 
@@ -888,7 +981,11 @@ class OfflineStore {
       });
     }
     await _persistAll();
-    return {'imported': imported.length, 'errors': errors, 'students': imported};
+    return {
+      'imported': imported.length,
+      'errors': errors,
+      'students': imported
+    };
   }
 
   Future<Map<String, dynamic>> exportStudents({String? courseId}) async {
@@ -1019,24 +1116,33 @@ class OfflineStore {
      SUBMISSIONS
      ============================================ */
 
+  /// Creates or replaces the student's submission for an assignment, like the
+  /// API's upsert. [status] is 'submitted' or 'late'.
   Future<Map<String, dynamic>> createSubmission({
     required String assignmentId,
     required String studentId,
     required List<Map<String, dynamic>> attachments,
+    String status = 'submitted',
   }) async {
     await _ensureLoaded();
     final now = DateTime.now().toIso8601String();
+    final index = _submissions.indexWhere((s) =>
+        s['assignmentId'] == assignmentId && s['studentId'] == studentId);
     final submission = <String, dynamic>{
-      'id': _id('sub'),
+      'id': index >= 0 ? _submissions[index]['id'] : _id('sub'),
       'assignmentId': assignmentId,
       'studentId': studentId,
-      'status': 'submitted',
+      'status': status,
       'submittedAt': now,
       'attachments': attachments,
-      'grade': null,
-      'effortScore': null,
+      'grade': index >= 0 ? _submissions[index]['grade'] : null,
+      'effortScore': index >= 0 ? _submissions[index]['effortScore'] : null,
     };
-    _submissions.add(submission);
+    if (index >= 0) {
+      _submissions[index] = submission;
+    } else {
+      _submissions.add(submission);
+    }
     await _persistAll();
     return Map<String, dynamic>.from(submission);
   }
@@ -1069,8 +1175,9 @@ class OfflineStore {
         },
       ];
     }
-    rows.sort((a, b) =>
-        (a['sentAt'] ?? '').toString().compareTo((b['sentAt'] ?? '').toString()));
+    rows.sort((a, b) => (a['sentAt'] ?? '')
+        .toString()
+        .compareTo((b['sentAt'] ?? '').toString()));
     return rows;
   }
 

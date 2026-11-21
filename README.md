@@ -96,17 +96,31 @@ Supported AI hosts: `chatgpt.com`, `chat.openai.com`, `claude.ai`,
 
 ### 3. Flutter app (`apps/app`)
 
-Cross-platform client with a five-tab shell and full auth flow:
+Cross-platform client (phone, tablet, desktop/web) built on a shared design
+system (`apps/app/lib/ui`): Inter typography, brand orange #FF6B00 on neutral
+surfaces, semantic status colours, light and dark themes.
 
-- **Auth gate**: the router redirects signed-out users to login; sign up, sign
-  in, and SMS verification ("forgot password") all round-trip the API. Tokens
-  are held in memory for the session.
-- Dashboard with greeting, deadline cards, and live summary metrics.
-- Courses loaded from the API with teacher names and open-assignment counts.
-- Calendar with upcoming events for the signed-in user's role.
-- Chat with course channels; messages post as the signed-in user.
-- Integrity with the real effort score for the first open assignment, and an
-  honest empty state until the extension records telemetry.
+- **Role-based navigation**: students, teachers and admins each get their own
+  tabs (bottom bar on phones, rail on tablets, sidebar on desktop); restricted
+  routes redirect. Every screen has a real URL.
+- **Auth**: sign in, sign up (student/teacher), and one-time-code sign-in. Session
+  changes navigate automatically; an expired token signs you out.
+- **Home**: role-specific dashboards — today's schedule and deadlines for
+  students; classes, open assignments and submission progress for teachers;
+  institution KPIs and a weekly attendance trend for admins.
+- **Courses**: catalogue, course detail (assignments, people), assignment detail
+  with link submission for students and a submission roster for staff.
+- **Calendar**: month view with agenda; admins and teachers create, edit and
+  delete events (title, type, start/end, department).
+- **Chat**: per-course channels with a course picker, read-only announcements for
+  students, optimistic sending and auto-refresh.
+- **Integrity**: per-assignment effort reports for students; class overview and
+  per-student drill-down for staff.
+- **Attendance**: personal record and excuse requests for students; per-course
+  rates and a roll-call screen (date picker, status chips, notes) for staff.
+- **Students, Departments, Notes**: full CRUD for admins/teachers, CSV import of
+  students, and CSV export (to clipboard) of students, attendance and notes.
+- **Profile & settings**: account details, theme (system/light/dark), data source.
 
 The API base URL defaults to `http://localhost:4000` and can be overridden at
 build time with `--dart-define=API_BASE_URL=https://your-api.example.com`.

@@ -41,13 +41,17 @@ class OfflineClient extends http.BaseClient {
     },
   ];
 
+  /// Mirrors the API seed, which only names u-teacher-1.
+  static const Map<String, String> _teacherNames = {'u-teacher-1': 'Tayyab'};
+
   static List<Map<String, dynamic>> get _assignments => [
         {
           'id': 'a1',
           'courseId': 'c-cs301',
           'title': 'Heuristic Evaluation',
           'brief': 'Evaluate a web UI against Nielsen heuristics.',
-          'dueAt': DateTime.now().add(const Duration(days: 3)).toIso8601String(),
+          'dueAt':
+              DateTime.now().add(const Duration(days: 3)).toIso8601String(),
           'status': 'open',
           'createdAt': '2026-09-01T00:00:00.000Z',
         },
@@ -56,7 +60,8 @@ class OfflineClient extends http.BaseClient {
           'courseId': 'c-cs301',
           'title': 'Usability Study Report',
           'brief': 'Write up findings from a usability test.',
-          'dueAt': DateTime.now().add(const Duration(days: 10)).toIso8601String(),
+          'dueAt':
+              DateTime.now().add(const Duration(days: 10)).toIso8601String(),
           'status': 'open',
           'createdAt': '2026-09-05T00:00:00.000Z',
         },
@@ -65,7 +70,8 @@ class OfflineClient extends http.BaseClient {
           'courseId': 'c-cs210',
           'title': 'Binary Search Trees',
           'brief': 'Implement BST insert, delete, traverse.',
-          'dueAt': DateTime.now().add(const Duration(days: 5)).toIso8601String(),
+          'dueAt':
+              DateTime.now().add(const Duration(days: 5)).toIso8601String(),
           'status': 'open',
           'createdAt': '2026-09-03T00:00:00.000Z',
         },
@@ -124,7 +130,8 @@ class OfflineClient extends http.BaseClient {
     if (path == '/health') {
       return _Result(200, {'status': 'ok', 'mode': 'offline'});
     }
-    if (path == '/college') {
+    // The API serves this at /api/v1/college; '/college' is kept for old builds.
+    if (path == '/college' || path == '/api/v1/college') {
       final departments = await _store.getDepartments();
       return _Result(200, {
         'data': {
@@ -160,7 +167,7 @@ class OfflineClient extends http.BaseClient {
       case 'students':
         return _studentsRoute(rest, method, body);
       case 'departments':
-        return _departmentsRoute(rest, method);
+        return _departmentsRoute(rest, method, body);
       case 'attendance':
         return _attendanceRoute(rest, method, query, body);
       case 'notes':
@@ -172,7 +179,9 @@ class OfflineClient extends http.BaseClient {
       case 'channels':
         return _channelsRoute(rest, method, body);
       case 'telemetry':
-        return _Result(200, {'data': {'status': 'ok'}});
+        return _Result(200, {
+          'data': {'status': 'ok'}
+        });
       case 'integrity':
         return _integrityRoute(rest, method);
       default:
@@ -187,13 +196,33 @@ class OfflineClient extends http.BaseClient {
     String method,
     Map<String, dynamic> body,
   ) async {
-    if (method != 'POST' && !(method == 'GET' && rest.length > 1 && rest[1] == 'me')) {
+    if (method != 'POST' &&
+        !(method == 'GET' && rest.length > 1 && rest[1] == 'me')) {
       return _Result(405, {
-        'error': {'code': 'METHOD_NOT_ALLOWED', 'message': 'Method not allowed'},
+        'error': {
+          'code': 'METHOD_NOT_ALLOWED',
+          'message': 'Method not allowed'
+        },
       });
     }
     if (rest.length > 1 && rest[1] == 'me') {
-      return _Result(200, {'data': {'user': _user()}});
+      return _Result(200, {
+        'data': {'user': _user()}
+      });
+    }
+    // Mirror the API: self-registration is limited to students and teachers.
+    if (rest.length > 1 && rest[1] == 'register') {
+      final requested = body['role']?.toString();
+      if (requested != null &&
+          requested != 'student' &&
+          requested != 'teacher') {
+        return _Result(400, {
+          'error': {
+            'code': 'INVALID_BODY',
+            'message': 'Role must be student or teacher',
+          },
+        });
+      }
     }
     final role = body['role']?.toString() ?? 'admin';
     final name = body['display_name']?.toString() ??
@@ -218,11 +247,28 @@ class OfflineClient extends http.BaseClient {
   Future<_Result> _coursesRoute(List<String> rest, String method) async {
     if (method != 'GET') {
       return _Result(405, {
-        'error': {'code': 'METHOD_NOT_ALLOWED', 'message': 'Method not allowed'},
+        'error': {
+          'code': 'METHOD_NOT_ALLOWED',
+          'message': 'Method not allowed'
+        },
       });
     }
     if (rest.length == 1) {
-      return _Result(200, {'data': _courses});
+      // Same enrichment as the API's GET /courses.
+      return _Result(200, {
+        'data': [
+          for (final c in _courses)
+            {
+              ...c,
+              'teacherName': _teacherNames[c['teacherId']] ?? 'Unassigned',
+              'studentCount': (c['studentIds'] as List).length,
+              'openAssignmentCount': _assignments
+                  .where(
+                      (a) => a['courseId'] == c['id'] && a['status'] == 'open')
+                  .length,
+            },
+        ],
+      });
     }
     final courseId = rest[1];
     if (rest.length == 2) {
@@ -240,21 +286,29 @@ class OfflineClient extends http.BaseClient {
       return _Result(200, {'data': rows});
     }
     if (rest.length == 3 && rest[2] == 'channels') {
+      // Per-course channel ids so messages don't leak between courses. CS 301
+      // keeps the original ids that the seeded messages belong to.
+      final suffix = courseId == 'c-cs301' ? '' : '-$courseId';
+      final course = _courses.where((c) => c['id'] == courseId).firstOrNull;
+      final members = <String>[
+        if (course != null) course['teacherId'] as String,
+        ...List<String>.from(course?['studentIds'] as List? ?? const []),
+      ];
       return _Result(200, {
         'data': [
           {
-            'id': 'ch-general',
+            'id': 'ch-general$suffix',
             'courseId': courseId,
             'name': 'General',
             'kind': 'discussion',
-            'memberIds': ['u-teacher-1', 'u-student-1'],
+            'memberIds': members,
           },
           {
-            'id': 'ch-announce',
+            'id': 'ch-announce$suffix',
             'courseId': courseId,
             'name': 'Announcements',
             'kind': 'announcement',
-            'memberIds': ['u-teacher-1', 'u-student-1'],
+            'memberIds': members,
           },
         ],
       });
@@ -289,49 +343,64 @@ class OfflineClient extends http.BaseClient {
       return _Result(200, {'data': assignment.first});
     }
     if (rest.length == 3 && rest[2] == 'roster' && method == 'GET') {
+      // Mirrors the API: every enrolled student, with their submission if any.
+      final assignment =
+          _assignments.where((a) => a['id'] == assignmentId).firstOrNull;
+      if (assignment == null) {
+        return _Result(404, {
+          'error': {'code': 'NOT_FOUND', 'message': 'Assignment not found'},
+        });
+      }
+      final course =
+          _courses.where((c) => c['id'] == assignment['courseId']).firstOrNull;
+      final studentIds =
+          List<String>.from(course?['studentIds'] as List? ?? const []);
+      final students = await _store.getStudents();
+      final submissions = (await _store.getSubmissions())
+          .where((s) => s['assignmentId'] == assignmentId)
+          .toList();
+      final roster = [
+        for (final id in studentIds)
+          () {
+            final student = students.where((s) => s['id'] == id).firstOrNull;
+            final sub =
+                submissions.where((s) => s['studentId'] == id).firstOrNull;
+            return <String, dynamic>{
+              'studentId': id,
+              'displayName': student?['displayName'] ?? 'Unknown student',
+              'status': sub?['status'] ?? 'missing',
+              'submittedAt': sub?['submittedAt'],
+              'effortScore': sub?['effortScore'],
+              'grade': sub?['grade'],
+            };
+          }(),
+      ];
       return _Result(200, {
-        'data': {
-          'roster': [
-            {
-              'studentId': 'u-student-1',
-              'displayName': 'Aeliya',
-              'status': 'submitted',
-              'score': 84,
-              'effortScore': 79,
-            },
-            {
-              'studentId': 'u-student-2',
-              'displayName': 'Sameer',
-              'status': 'submitted',
-              'score': 71,
-              'effortScore': 68,
-            },
-            {
-              'studentId': 'u-student-3',
-              'displayName': 'Saifi',
-              'status': 'pending',
-              'score': 0,
-              'effortScore': 0,
-            },
-          ],
-        },
+        'data': {'assignment': assignment, 'roster': roster},
       });
     }
     if (rest.length == 3 && rest[2] == 'submissions' && method == 'POST') {
       final attachments = (body['attachments'] as List? ?? const [])
           .map((item) => Map<String, dynamic>.from(item as Map))
           .map((item) => <String, dynamic>{
-                'id': item['id'] ?? 'att-${DateTime.now().microsecondsSinceEpoch}',
+                'id': item['id'] ??
+                    'att-${DateTime.now().microsecondsSinceEpoch}',
                 'fileName': item['fileName'] ?? 'submission.txt',
                 'mimeType': item['mimeType'] ?? 'text/plain',
                 'sizeBytes': item['sizeBytes'] ?? 0,
                 'url': item['url'] ?? 'offline://submission',
               })
           .toList();
+      final assignment =
+          _assignments.where((a) => a['id'] == assignmentId).firstOrNull;
+      final dueAt = DateTime.tryParse(assignment?['dueAt']?.toString() ?? '');
       final submission = await _store.createSubmission(
         assignmentId: assignmentId,
         studentId: body['studentId']?.toString() ?? 'u-student-1',
         attachments: attachments,
+        status: dueAt != null && dueAt.isBefore(DateTime.now())
+            ? 'late'
+            : 'submitted',
       );
       return _Result(201, {'data': submission});
     }
@@ -377,7 +446,9 @@ class OfflineClient extends http.BaseClient {
       }
       if (method == 'DELETE') {
         await _store.deleteStudent(id);
-        return _Result(200, {'data': {'success': true}});
+        return _Result(200, {
+          'data': {'success': true}
+        });
       }
     }
     if (rest.length == 3 && rest[2] == 'departments') {
@@ -398,17 +469,62 @@ class OfflineClient extends http.BaseClient {
         studentId: rest[1],
         departmentId: rest[3],
       );
-      return _Result(200, {'data': {'success': true}});
+      return _Result(200, {
+        'data': {'success': true}
+      });
     }
     return _Result(404, {
       'error': {'code': 'NOT_FOUND', 'message': 'Unknown student route'},
     });
   }
 
-  Future<_Result> _departmentsRoute(List<String> rest, String method) async {
+  Future<_Result> _departmentsRoute(
+    List<String> rest,
+    String method,
+    Map<String, dynamic> body,
+  ) async {
+    const notFound = {
+      'error': {'code': 'NOT_FOUND', 'message': 'Department not found'},
+    };
+    if (rest.length == 1 && method == 'POST') {
+      final name = body['name']?.toString().trim() ?? '';
+      final code = body['code']?.toString().trim() ?? '';
+      if (name.isEmpty || code.isEmpty) {
+        return _Result(400, {
+          'error': {
+            'code': 'INVALID_BODY',
+            'message': 'Name and code are required'
+          },
+        });
+      }
+      return _Result(201, {
+        'data': await _store.createDepartment(
+          name: name,
+          code: code,
+          category: body['category']?.toString() ?? '3 Years',
+          durationMonths: (body['durationMonths'] as num?)?.toInt() ?? 36,
+        ),
+      });
+    }
+    if (rest.length == 2 && method == 'PUT') {
+      final updated = await _store.updateDepartment(rest[1], body);
+      return updated == null
+          ? _Result(404, notFound)
+          : _Result(200, {'data': updated});
+    }
+    if (rest.length == 2 && method == 'DELETE') {
+      return await _store.deleteDepartment(rest[1])
+          ? _Result(200, {
+              'data': {'success': true}
+            })
+          : _Result(404, notFound);
+    }
     if (method != 'GET') {
       return _Result(405, {
-        'error': {'code': 'METHOD_NOT_ALLOWED', 'message': 'Method not allowed'},
+        'error': {
+          'code': 'METHOD_NOT_ALLOWED',
+          'message': 'Method not allowed'
+        },
       });
     }
     if (rest.length == 1) {
@@ -429,7 +545,10 @@ class OfflineClient extends http.BaseClient {
   Future<_Result> _integrityRoute(List<String> rest, String method) async {
     if (method != 'GET' || rest.length < 3) {
       return _Result(405, {
-        'error': {'code': 'METHOD_NOT_ALLOWED', 'message': 'Method not allowed'},
+        'error': {
+          'code': 'METHOD_NOT_ALLOWED',
+          'message': 'Method not allowed'
+        },
       });
     }
     final report = await _store.getIntegrityReport(rest[1], rest[2]);
@@ -545,7 +664,9 @@ class OfflineClient extends http.BaseClient {
       }
       if (method == 'DELETE') {
         await _store.deleteTeacherNote(id);
-        return _Result(200, {'data': {'success': true}});
+        return _Result(200, {
+          'data': {'success': true}
+        });
       }
       if (method == 'GET') {
         final notes = await _store.getTeacherNotes();
@@ -661,7 +782,9 @@ class OfflineClient extends http.BaseClient {
       }
       if (method == 'DELETE') {
         await _store.deleteCalendarEvent(id);
-        return _Result(200, {'data': {'success': true}});
+        return _Result(200, {
+          'data': {'success': true}
+        });
       }
     }
     return _Result(404, {

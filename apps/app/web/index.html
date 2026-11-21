@@ -1,46 +1,56 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
+  <!-- Replaced by `flutter build --base-href`; must start and end with "/". -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="EdTech — courses, attendance, schedules, class chat and process-based integrity insights for students, teachers and administrators.">
+  <meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0C0A09" media="(prefers-color-scheme: dark)">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="edtech_app">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="EdTech">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>edtech_app</title>
+  <title>EdTech</title>
   <link rel="manifest" href="manifest.json">
+
+  <style>
+    /* Branded splash shown until Flutter paints its first frame. */
+    html, body { margin: 0; height: 100%; background: #FAFAF9; }
+    @media (prefers-color-scheme: dark) { html, body { background: #0C0A09; } }
+    #splash {
+      position: fixed; inset: 0; display: flex; align-items: center;
+      justify-content: center; transition: opacity .25s ease;
+    }
+    #splash img {
+      width: 72px; height: 72px; border-radius: 16px;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { transform: scale(.92); opacity: .75; } }
+    @media (prefers-reduced-motion: reduce) { #splash img { animation: none; } }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
+  <div id="splash" aria-label="Loading EdTech" role="progressbar">
+    <img src="icons/Icon-192.png" alt="">
+  </div>
+  <script>
+    // Remove the splash once Flutter has rendered.
+    window.addEventListener('flutter-first-frame', function () {
+      var s = document.getElementById('splash');
+      if (!s) return;
+      s.style.opacity = '0';
+      setTimeout(function () { s.remove(); }, 300);
+    });
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

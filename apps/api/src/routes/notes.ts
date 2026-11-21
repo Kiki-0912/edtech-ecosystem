@@ -5,7 +5,7 @@ import {
   upsertTeacherNote,
   deleteTeacherNote,
 } from '../store/db.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireRoles } from '../middleware/auth.js';
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
 
@@ -39,7 +39,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/notes - create a note (teacher/admin only)
   fastify.post(
     '/notes',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;

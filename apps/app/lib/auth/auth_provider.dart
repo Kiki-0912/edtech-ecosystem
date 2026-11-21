@@ -36,11 +36,39 @@ class AuthProvider extends ChangeNotifier {
         _user = User.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
       } catch (_) {
         // Corrupted persisted state: clear it.
+        _token = null;
+        _user = null;
         await clearPersisted();
       }
     }
+    await _revalidate();
     _initialized = true;
     notifyListeners();
+  }
+
+  /// Against the real API, confirm a restored session is still valid and
+  /// refresh the cached user. Only a definite 401 signs the user out; network
+  /// failures keep the session so the app still opens without connectivity.
+  Future<void> _revalidate() async {
+    final token = _token;
+    if (token == null || _api.isOffline) return;
+    try {
+      final data =
+          await _api.getMe(token: token).timeout(const Duration(seconds: 5));
+      final userJson = data['user'];
+      if (userJson is Map<String, dynamic>) {
+        _user = User.fromJson(userJson);
+        await _persist();
+      }
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        _token = null;
+        _user = null;
+        await clearPersisted();
+      }
+    } catch (_) {
+      // Offline / timeout: keep the cached session.
+    }
   }
 
   Future<void> _persist() async {

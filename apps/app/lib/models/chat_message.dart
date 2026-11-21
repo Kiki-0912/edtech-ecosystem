@@ -19,7 +19,8 @@ class ChatMessage {
       channelId: json['channelId'] as String,
       authorId: json['authorId'] as String,
       body: json['body'] as String,
-      sentAt: DateTime.tryParse(json['sentAt'] as String? ?? '') ?? DateTime.now(),
+      sentAt:
+          DateTime.tryParse(json['sentAt'] as String? ?? '') ?? DateTime.now(),
     );
   }
 

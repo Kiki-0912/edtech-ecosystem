@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/services/api_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Integration test against the local API (default http://localhost:4000).
 ///
@@ -12,10 +15,23 @@ void main() {
   const phone = '+15550001002'; // seeded student Aeliya
   const password = 'password123';
 
+  // The app defaults to the offline demo backend; these tests exercise the
+  // real Fastify API, so force online mode for the duration of the suite.
+  setUp(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    // The test binding installs a mock HttpClient that answers every request
+    // with 400, which made this suite skip itself even with the API running.
+    // Restore real networking so it actually exercises the live API.
+    HttpOverrides.global = null;
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    api.offlineMode = false;
+  });
+  tearDown(() => api.offlineMode = true);
+
   Future<bool> apiReachable() async {
     try {
       final response = await http
-          .get(Uri.parse('http://localhost:4000/health'))
+          .get(Uri.parse('http://127.0.0.1:4000/health'))
           .timeout(const Duration(seconds: 3));
       return response.statusCode == 200;
     } catch (_) {
@@ -34,6 +50,8 @@ void main() {
     expect(auth.isAuthenticated, isTrue);
     expect(auth.user?.displayName, 'Aeliya');
     expect(auth.token, isNotEmpty);
+    // Subsequent API calls in this suite run through the shared ApiService.
+    api.token = auth.token;
   });
 
   test('wrong password is rejected', () async {
@@ -93,7 +111,8 @@ void main() {
     expect(messages.first.body, isNotEmpty);
   });
 
-  test('integrity report returns null or a real report, never fake data', () async {
+  test('integrity report returns null or a real report, never fake data',
+      () async {
     if (!await apiReachable()) {
       markTestSkipped('API not reachable on localhost:4000');
       return;
@@ -130,5 +149,34 @@ void main() {
       code: sms['code'] as String,
     );
     expect(verified['token'], isNotEmpty);
+  });
+
+  test('college info loads from /api/v1/college (was a 404)', () async {
+    if (!await apiReachable()) {
+      markTestSkipped('API not reachable on localhost:4000');
+      return;
+    }
+    final login = await api.login(phone: phone, password: password);
+    api.token = login['token'] as String;
+    final college = await api.getCollege();
+    expect(college, isNotNull);
+    expect(college!.departments, isNotEmpty);
+  });
+
+  test('admin role is rejected on self sign-up', () async {
+    if (!await apiReachable()) {
+      markTestSkipped('API not reachable on localhost:4000');
+      return;
+    }
+    expect(
+      () => api.register(
+        phone: '+1666${DateTime.now().millisecondsSinceEpoch % 100000000}',
+        email: 'admin-${DateTime.now().millisecondsSinceEpoch}@test.dev',
+        displayName: 'Would-be Admin',
+        password: 'secret123',
+        role: 'admin',
+      ),
+      throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 400)),
+    );
   });
 }

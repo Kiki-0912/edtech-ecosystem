@@ -2,10 +2,13 @@ class AppConfig {
   /// API base URL. Defaults to the local dev API; override at build time:
   /// `flutter build web --release --dart-define=API_BASE_URL=https://your-api.vercel.app`
   /// On Netlify, set the `API_BASE_URL` build environment variable in the site
-  /// dashboard (or it falls back to http://localhost:4000).
+  /// dashboard (or it falls back to http://127.0.0.1:4000).
+  ///
+  /// 127.0.0.1 rather than localhost: on some Linux setups `localhost`
+  /// resolves to ::1 first while the API binds IPv4 0.0.0.0 only.
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:4000',
+    defaultValue: 'http://127.0.0.1:4000',
   );
 
   /// When true the app uses the bundled, persistent on-device demo store

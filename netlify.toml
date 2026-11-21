@@ -1,10 +1,10 @@
 [build]
   base = "apps/app"
-  command = "flutter build web --release --dart-define=API_BASE_URL=${API_BASE_URL:-http://localhost:4000} --dart-define=OFFLINE_MODE=${OFFLINE_MODE:-true}"
+  command = "flutter build web --release --dart-define=API_BASE_URL=${API_BASE_URL:-http://localhost:4000} --dart-define=OFFLINE_MODE=${OFFLINE_MODE:-true} && node scripts/bust_cache.js"
   publish = "build/web"
 
 [build.environment]
-  FLUTTER_VERSION = "3.47.2"
+  FLUTTER_VERSION = "3.50.0"
 
 [[redirects]]
   from = "/*"
