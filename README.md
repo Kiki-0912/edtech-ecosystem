@@ -297,11 +297,12 @@ netlify link --id <site-id> --filter @edtech/api
 netlify env:set AUTH_SECRET "$(openssl rand -hex 32)" --site <site-id> --context production --secret
 netlify env:set SEED_DEMO_PASSWORD '<password>' --site <site-id> --context production --secret
 netlify env:set SEED_ADMIN_EMAIL '<admin email>' --site <site-id>
-netlify env:set NODE_ENV production --site <site-id> --scope functions
 netlify deploy --build --prod --filter @edtech/api
 ```
 
 Check the deploy with `GET /health`: it should report `"storage":"postgres"`.
+Never set `SMS_DEV_ECHO` on a deployment: it returns SMS sign-in codes in API
+responses (local demos only; `npm run dev:api` enables it).
 
 ### Deploy the API to Vercel
 
