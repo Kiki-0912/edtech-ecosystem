@@ -24,7 +24,7 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
     '/students',
     { preHandler: [authenticate] },
     async (request, reply) => {
-      const users = getUsers();
+      const users = await getUsers();
       const students = users.filter((u) => u.role === 'student');
       return reply.send({ data: students });
     }
@@ -36,7 +36,7 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const user = getUsers().find((u) => u.id === (req.params as { id: string }).id);
+      const user = (await getUsers()).find((u) => u.id === (req.params as { id: string }).id);
       if (!user || user.role !== 'student') {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Student not found' } });
       }
@@ -64,7 +64,7 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
       };
       const id = randomUUID();
       const now = new Date().toISOString();
-      createUser({
+      await createUser({
         id,
         displayName: body.displayName,
         email: body.email,
@@ -78,14 +78,14 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
 
       // If department specified, enroll student
       if (body.departmentId) {
-        enrollStudentInDepartment({
+        await enrollStudentInDepartment({
           studentId: id,
           departmentId: body.departmentId,
           enrolledBy: caller?.id ?? id,
         });
       }
 
-      const user = getUsers().find((u) => u.id === id);
+      const user = (await getUsers()).find((u) => u.id === id);
       return reply.code(201).send({ data: user });
     }
   );
@@ -111,21 +111,21 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
       if (body.displayName !== undefined) updates.displayName = body.displayName;
       if (body.email !== undefined) updates.email = body.email;
       if (body.phone !== undefined) updates.phone = body.phone;
-      updateUser(studentId, updates);
+      await updateUser(studentId, updates);
 
       // Update course if provided
       if (body.courseId !== undefined) {
         // Remove from all courses first, then add to new one
-        const courses = getCourses();
+        const courses = await getCourses();
         for (const course of courses) {
           if (course.studentIds.includes(studentId)) {
-            removeStudentFromCourse(course.id, studentId);
+            await removeStudentFromCourse(course.id, studentId);
           }
         }
-        addStudentToCourse(body.courseId, studentId);
+        await addStudentToCourse(body.courseId, studentId);
       }
 
-      return reply.send({ data: getUsers().find((u) => u.id === studentId) });
+      return reply.send({ data: (await getUsers()).find((u) => u.id === studentId) });
     }
   );
 
@@ -141,16 +141,16 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
       }
       const studentId = (req.params as { id: string }).id;
       // Remove from all courses
-      const courses = getCourses();
+      const courses = await getCourses();
       for (const course of courses) {
         if (course.studentIds.includes(studentId)) {
-          removeStudentFromCourse(course.id, studentId);
+          await removeStudentFromCourse(course.id, studentId);
         }
       }
       // Remove department enrollments
-      const deptEnrollments = getStudentDepartments(studentId);
+      const deptEnrollments = await getStudentDepartments(studentId);
       for (const d of deptEnrollments) {
-        unenrollStudentFromDepartment(studentId, d.departmentId);
+        await unenrollStudentFromDepartment(studentId, d.departmentId);
       }
       return reply.send({ data: { success: true } });
     }
@@ -162,7 +162,7 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const students = getStudentsByCourse((req.params as { courseId: string }).courseId);
+      const students = await getStudentsByCourse((req.params as { courseId: string }).courseId);
       return reply.send({ data: students });
     }
   );

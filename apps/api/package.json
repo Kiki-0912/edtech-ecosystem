@@ -11,14 +11,19 @@
     "build": "tsup",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test 'test/**/*.test.ts'"
+    "test": "tsx --test 'test/**/*.test.ts'",
+    "db:migrate": "tsx src/scripts/db-migrate.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
-    "fastify": "^5.2.1"
+    "fastify": "^5.2.1",
+    "pg": "^8.23.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.17",
+    "@electric-sql/pglite-socket": "^0.2.20",
     "@types/node": "^22.10.7",
+    "@types/pg": "^8.23.1",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

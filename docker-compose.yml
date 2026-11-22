@@ -1,4 +1,21 @@
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      - POSTGRES_USER=edtech
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-edtech}
+      - POSTGRES_DB=edtech
+    ports:
+      - "5432:5432"
+    volumes:
+      - edtech-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edtech -d edtech"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -11,9 +28,12 @@ services:
       - HOST=0.0.0.0
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
       - AUTH_SECRET=${AUTH_SECRET:-edtech-dev-secret-change-me}
-    volumes:
-      - edtech-data:/app/data
+      - DATABASE_URL=postgresql://edtech:${POSTGRES_PASSWORD:-edtech}@db:5432/edtech
+      - SEED_DEMO_DATA=${SEED_DEMO_DATA:-true}
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  edtech-data:
+  edtech-pg:

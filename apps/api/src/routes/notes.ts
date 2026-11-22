@@ -17,7 +17,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const { courseId, courseCode } = request.query as { courseId?: string; courseCode?: string };
-      const notes = getTeacherNotes(courseId, courseCode);
+      const notes = await getTeacherNotes(courseId, courseCode);
       return reply.send({ data: notes });
     }
   );
@@ -28,7 +28,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const note = getTeacherNote((req.params as { id: string }).id);
+      const note = await getTeacherNote((req.params as { id: string }).id);
       if (!note) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Note not found' } });
       }
@@ -50,7 +50,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
         title: string;
         content: string;
       };
-      const note = upsertTeacherNote({
+      const note = await upsertTeacherNote({
         courseId: body.courseId,
         bookName: body.bookName,
         courseCode: body.courseCode,
@@ -69,7 +69,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
-      const note = getTeacherNote((req.params as { id: string }).id);
+      const note = await getTeacherNote((req.params as { id: string }).id);
       if (!note) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Note not found' } });
       }
@@ -82,7 +82,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
         title: string;
         content: string;
       }>;
-      const updated = upsertTeacherNote({
+      const updated = await upsertTeacherNote({
         id: note.id,
         courseId: note.courseId,
         bookName: body.bookName ?? note.bookName,
@@ -102,14 +102,14 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
-      const note = getTeacherNote((req.params as { id: string }).id);
+      const note = await getTeacherNote((req.params as { id: string }).id);
       if (!note) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Note not found' } });
       }
       if (caller?.role !== 'admin' && note.authorId !== caller?.id) {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Not the author' } });
       }
-      deleteTeacherNote(note.id);
+      await deleteTeacherNote(note.id);
       return reply.send({ data: { success: true } });
     }
   );

@@ -13,7 +13,7 @@ import {
   getIntegrityFlags,
   getSubmission,
   getSubmissionsByAssignment,
-  getTelemetryBatches,
+  hasTelemetryBatch,
   getUser,
   setEffortScore,
   setIntegrityFlags,
@@ -203,10 +203,7 @@ export async function telemetryRoutes(app: FastifyInstance) {
         studentId,
         effortScore: score,
         flags: await getIntegrityFlags(studentId, assignmentId),
-        replayAvailable: (await getTelemetryBatches()).some(
-          (batch) =>
-            batch.assignmentId === assignmentId && batch.studentId === studentId,
-        ),
+        replayAvailable: await hasTelemetryBatch(studentId, assignmentId),
         generatedAt: new Date().toISOString(),
       };
 

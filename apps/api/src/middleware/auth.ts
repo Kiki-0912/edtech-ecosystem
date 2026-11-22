@@ -33,7 +33,7 @@ export async function authenticate(request: any, reply: FastifyReply) {
     return fail(reply, 401, "UNAUTHORIZED", "Invalid or expired token");
   }
 
-  const user = getUser(userId);
+  const user = await getUser(userId);
   if (!user) {
     return fail(reply, 401, "UNAUTHORIZED", "User no longer exists");
   }

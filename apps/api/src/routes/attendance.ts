@@ -17,7 +17,7 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const { courseId, date } = request.query as { courseId?: string; date?: string };
-      const records = getAttendanceRecords(courseId, date);
+      const records = await getAttendanceRecords(courseId, date);
       return reply.send({ data: records });
     }
   );
@@ -28,7 +28,7 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const record = getAttendanceRecord((req.params as { id: string }).id);
+      const record = await getAttendanceRecord((req.params as { id: string }).id);
       if (!record) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Attendance record not found' } });
       }
@@ -50,7 +50,7 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
         status: 'present' | 'absent' | 'late' | 'excused';
         notes?: string;
       };
-      const record = upsertAttendanceRecord({
+      const record = await upsertAttendanceRecord({
         courseId: body.courseId,
         studentId: body.studentId,
         date: body.date,
@@ -74,16 +74,19 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
         date: string; // YYYY-MM-DD
         records: { studentId: string; status: 'present' | 'absent' | 'late' | 'excused'; notes?: string }[];
       };
-      const results = body.records.map((r) =>
-        upsertAttendanceRecord({
-          courseId: body.courseId,
-          studentId: r.studentId,
-          date: body.date,
-          status: r.status,
-          markedBy: caller?.id ?? 'system',
-          notes: r.notes,
-        })
-      );
+      const results = [];
+      for (const r of body.records) {
+        results.push(
+          await upsertAttendanceRecord({
+            courseId: body.courseId,
+            studentId: r.studentId,
+            date: body.date,
+            status: r.status,
+            markedBy: caller?.id ?? 'system',
+            notes: r.notes,
+          })
+        );
+      }
       return reply.code(201).send({ data: results });
     }
   );
@@ -96,8 +99,8 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
       const req = request as AuthRequest;
       const { courseId } = req.params as { courseId: string };
       const { date } = request.query as { date?: string };
-      const students = getStudentsByCourse(courseId);
-      const records = getAttendanceRecords(courseId, date);
+      const students = await getStudentsByCourse(courseId);
+      const records = await getAttendanceRecords(courseId, date);
       const recordMap = new Map(records.map((r) => [r.studentId, r]));
       const result = students.map((s) => ({
         id: s.id,

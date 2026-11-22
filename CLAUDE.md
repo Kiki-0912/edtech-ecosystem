@@ -11,7 +11,7 @@ integrity monitoring. It has four deployable pieces plus a shared types package.
 | `apps/api/` | Fastify 5 + TypeScript (ESM), npm workspace `@edtech/api` | REST API under `/api/v1`. Auth (scrypt + HMAC tokens + SMS codes), courses, classroom, students, departments, attendance, notes, Excel, telemetry ingestion |
 | `apps/api/src/create-app.ts` | | Builds the Fastify app: CORS, the global auth `preHandler`, route registration, 404/error handlers. **Every new route module gets registered here.** |
 | `apps/api/src/routes/*.ts` | | One `FastifyPluginAsync` per domain |
-| `apps/api/src/store/db.ts` | | Seeded **in-memory** data layer and CRUD helpers (`memory.ts` = seed data). `apps/api/db/*.sql` is the reference schema; it is not wired up |
+| `apps/api/src/store/db.ts` | | Data-access **facade** every route imports. `DATABASE_URL` set → `pg-store.ts` (Postgres via `pg`; migrations in `migrations.ts`, auto-applied + seeded on start); unset → `memory-store.ts` (seeded in-memory, `memory.ts` = seed data). Both implement the same async `Store` type. `apps/api/db/*.sql` is the obsolete SQLite schema |
 | `apps/api/src/services/effort.ts` | | Effort score + integrity flags. Must stay consistent with `crates/telemetry-core` |
 | `api/index.ts` | Vercel function | Serverless entry that reuses `buildApp()`. `vercel.json` rewrites everything here |
 | `packages/shared/` | TypeScript, `@edtech/shared` | Domain contracts (users, courses, telemetry, effort, `ApiError` envelopes). Source-only, no build step |
@@ -39,6 +39,8 @@ npm run dev:api                               # tsx watch on :4000
 npm run build:api                             # tsup → apps/api/dist
 npm run typecheck                             # tsc --noEmit for api + shared
 npm run test:api                              # API tests (node:test + app.inject, apps/api/test)
+npm run db:up                                 # local Postgres via docker-compose
+DATABASE_URL=... npm run db:migrate           # apply migrations + seed an empty DB
 
 # Flutter (from apps/app)
 flutter analyze                               # gate: no issues at all
@@ -58,11 +60,11 @@ cargo clippy --manifest-path crates/telemetry-core/Cargo.toml -- -D warnings
 cargo fmt --manifest-path crates/telemetry-core/Cargo.toml -- --check
 ```
 
-Baseline after the UI overhaul (2026-11-21): typecheck clean; `npm run test:api`
-15 pass; `flutter analyze` reports **no issues** (keep it that way, infos
+Baseline after the Postgres work (2026-11-22): typecheck clean; `npm run test:api`
+25 pass (10 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
 included); `flutter test` ~89 pass, with `api_integration_test.dart` skipping
-unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy clean,
-but `cargo fmt --check` already fails — pre-existing, not your regression.
+unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
+`cargo fmt --check` clean. CI runs Node 22 (`node --test` globs need Node ≥ 21).
 
 ## Workflow rules
 
@@ -108,8 +110,14 @@ but `cargo fmt --check` already fails — pre-existing, not your regression.
 - **Privacy (extension):** never capture key content, password or hidden
   inputs, or `[data-sensitive]` elements, and never record or upload
   anything before consent. Batches stay HMAC-signed.
-- **Persistence** is in-memory (`store/db.ts`). Don't add a database dependency
-  without a plan. Vercel cold starts reset state.
+- **Persistence** goes through `store/db.ts`. A new store function must be added
+  to `memory-store.ts` **and** `pg-store.ts` (the `Store` type enforces parity)
+  and called with `await`. Schema changes are a new entry in `migrations.ts`,
+  never an edit to a shipped one. Timestamps are ISO TEXT so client local times
+  round-trip unchanged. Without `DATABASE_URL` (tests, Vercel unconfigured)
+  state is in-memory and resets on restart.
+- The Fastify error handler must be registered before the route plugins
+  (plugins capture the handler that exists when they register).
 - Pinned on purpose: `shared_preferences_android: 2.4.28` (avoids an NDK
   requirement). Don't bump it.
 

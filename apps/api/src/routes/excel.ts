@@ -34,7 +34,7 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
           }
           const id = `stu-${Date.now()}-${i}`;
           const now = new Date().toISOString();
-          createUser({
+          await createUser({
             id,
             displayName: row.name,
             email: `${row.rollNumber.toLowerCase().replace(/\s/g, '')}@example.edu`,
@@ -47,11 +47,11 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
           });
           if (body.courseId) {
             const { addStudentToCourse } = await import('../store/db.js');
-            addStudentToCourse(body.courseId, id);
+            await addStudentToCourse(body.courseId, id);
           }
           if (row.departmentId) {
             const { enrollStudentInDepartment } = await import('../store/db.js');
-            enrollStudentInDepartment({
+            await enrollStudentInDepartment({
               studentId: id,
               departmentId: row.departmentId,
               enrolledBy: caller?.id ?? id,
@@ -79,10 +79,10 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin or teacher only' } });
       }
       const { courseId } = request.query as { courseId?: string };
-      let students = getUsers().filter((u) => u.role === 'student');
+      let students = (await getUsers()).filter((u) => u.role === 'student');
       if (courseId) {
         const { getStudentsByCourse } = await import('../store/db.js');
-        students = getStudentsByCourse(courseId);
+        students = await getStudentsByCourse(courseId);
       }
       const rows = students.map((s) => ({
         name: s.displayName,
@@ -103,7 +103,7 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { getAttendanceRecords } = await import('../store/db.js');
       const { courseId, date } = request.query as { courseId?: string; date?: string };
-      const records = getAttendanceRecords(courseId, date);
+      const records = await getAttendanceRecords(courseId, date);
       const rows = records.map((r) => ({
         id: r.id,
         courseId: r.courseId,
@@ -125,7 +125,7 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       const { getTeacherNotes } = await import('../store/db.js');
       const { courseId, courseCode } = request.query as { courseId?: string; courseCode?: string };
-      const notes = getTeacherNotes(courseId, courseCode);
+      const notes = await getTeacherNotes(courseId, courseCode);
       const rows = notes.map((n) => ({
         id: n.id,
         courseId: n.courseId,
