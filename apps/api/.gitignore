@@ -1,3 +1,4 @@
 .vercel
 .netlify
 netlify/public
+netlify/build

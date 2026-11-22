@@ -1,12 +1,39 @@
 // The Netlify Function adapter: web Request in → Fastify → web Response out.
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import handler, { config } from "../netlify/functions/api.mts";
+import handler from "../src/netlify-handler";
+import { buildNetlifyHandler, DEFAULT_OUTFILE } from "../src/scripts/build-netlify-handler";
 
 const BASE = "https://edtech-api.example.netlify.app";
 
-test("routes every path to the function", () => {
-  assert.deepEqual(config.path, ["/", "/*"]);
+test("the deployed bundle runs where require(esm) is unavailable (Netlify's Lambda)", async () => {
+  // Build exactly what Netlify deploys, then check the function file's wiring.
+  await buildNetlifyHandler(DEFAULT_OUTFILE);
+  const fn = await import("../netlify/functions/api.mts");
+  assert.deepEqual(fn.config.path, ["/", "/*"]);
+  assert.equal(typeof fn.default, "function");
+
+  // Production crashed with ERR_REQUIRE_ESM (light-my-request -> cookie@2).
+  const script = `
+    const { default: handler } = await import(${JSON.stringify(DEFAULT_OUTFILE)});
+    const res = await handler(new Request("https://x.test/health"));
+    console.log("RESULT " + JSON.stringify({ status: res.status, body: await res.json() }));
+    process.exit(0);`;
+  const env = { ...process.env };
+  for (const key of ["DATABASE_URL", "NETLIFY_DB_URL", "NETLIFY_DATABASE_URL"]) delete env[key];
+  const { stdout } = await promisify(execFile)(
+    process.execPath,
+    ["--no-experimental-require-module", "--input-type=module", "-e", script],
+    { env },
+  );
+  // stdout also carries the API's JSON log lines; pick out the marked result.
+  const line = stdout.split("\n").find((entry) => entry.startsWith("RESULT "));
+  assert.ok(line, stdout);
+  const result = JSON.parse(line.slice("RESULT ".length));
+  assert.equal(result.status, 200);
+  assert.equal(result.body.status, "ok");
 });
 
 test("serves public routes", async () => {

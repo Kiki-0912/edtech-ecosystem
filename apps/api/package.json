@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test 'test/**/*.test.ts'",
     "db:migrate": "tsx src/scripts/db-migrate.ts",
-    "db:netlify-migrations": "tsx src/scripts/netlify-migrations.ts"
+    "db:netlify-migrations": "tsx src/scripts/netlify-migrations.ts",
+    "build:netlify": "tsx src/scripts/build-netlify-handler.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
@@ -26,6 +27,7 @@
     "@netlify/database": "^2.0.3",
     "@types/node": "^22.10.7",
     "@types/pg": "^8.23.1",
+    "esbuild": "0.27.7",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

@@ -3,8 +3,9 @@
 # Paths below are relative to the repo root; deploy with
 #   netlify deploy --build --prod --filter @edtech/api
 [build]
-  # Nothing static to build; the publish dir only needs to exist.
-  command = "mkdir -p apps/api/netlify/public"
+  # Bundle the function handler (see src/scripts/build-netlify-handler.ts);
+  # nothing static is published, the publish dir only needs to exist.
+  command = "npm run build:netlify --workspace @edtech/api && mkdir -p apps/api/netlify/public"
   publish = "apps/api/netlify/public"
 
 [build.environment]
@@ -12,10 +13,8 @@
 
 [functions]
   directory = "apps/api/netlify/functions"
-  node_bundler = "esbuild"
-  # Load these from node_modules instead of bundling them (CommonJS deps with
-  # dynamic requires bundle poorly into an ESM function).
-  external_node_modules = ["fastify", "@fastify/cors", "pg"]
+  # Netlify only traces files for this function; the handler it imports is
+  # already an esbuild bundle that leaves `pg` external (traced from node_modules).
 
 # Netlify Database: provisioned because @netlify/database is a dependency.
 # These migrations are generated from src/store/migrations.ts

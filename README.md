@@ -274,7 +274,10 @@ and is no longer used.
 
 The API runs as one Netlify Function (`apps/api/netlify/functions/api.mts`) that
 replays each request into the Fastify app, so behaviour matches the standalone
-server. `apps/api/netlify.toml` configures it as a monorepo package.
+server. `apps/api/netlify.toml` configures it as a monorepo package. The build
+command bundles the handler with esbuild (`npm run build:netlify`): Netlify's
+Lambda runtime cannot `require()` ES modules, which Fastify's inject dependency
+needs, so the function must ship that bundle rather than plain `node_modules`.
 
 **Database:** Netlify Database (built-in Postgres). Because `@netlify/database`
 is a dependency of `apps/api`, every build provisions the site's database and

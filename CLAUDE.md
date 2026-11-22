@@ -24,8 +24,9 @@ integrity monitoring. It has four deployable pieces plus a shared types package.
 | `crates/telemetry-core/` | Rust 2021, serde | Native event model and effort-scoring engine (cdylib/staticlib/rlib) |
 | `.github/workflows/ci.yml` | | CI. Keep it green; it defines the required checks |
 
-Deploy targets: Netlify API (`apps/api/netlify.toml` + `apps/api/netlify/functions/api.mts`,
-deploy with `--filter @edtech/api`), Vercel (API, `vercel.json`), Netlify (Flutter web, root `netlify.toml`),
+Deploy targets: Netlify API (`apps/api/netlify.toml`; `netlify/functions/api.mts` re-exports an
+esbuild bundle of `src/netlify-handler.ts` built by `npm run build:netlify` — Netlify's Lambda can't
+`require()` ESM, so never ship Fastify unbundled; deploy with `--filter @edtech/api`), Vercel (API, `vercel.json`), Netlify (Flutter web, root `netlify.toml`),
 Docker (`Dockerfile`, `docker-compose.yml`, API on port 4000).
 
 ## Commands (run from repo root unless noted)
