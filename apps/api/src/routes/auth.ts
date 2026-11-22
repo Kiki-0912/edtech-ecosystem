@@ -215,9 +215,11 @@ export async function authRoutes(app: FastifyInstance) {
       expiresAt,
     });
 
-    // In production an SMS provider (Twilio/Vonage) would deliver this code.
-    // The code is only echoed outside production to support local demos.
-    if (config.env !== "production") {
+    // A real SMS provider (Twilio/Vonage) would deliver this code. Returning or
+    // logging it lets anyone sign in as that phone, so it happens only when a
+    // local demo opts in explicitly (never by default, whatever NODE_ENV is).
+    const echo = config.smsDevEcho;
+    if (echo) {
       app.log.info({ phone }, `SMS verification code: ${code}`);
     }
 
@@ -225,7 +227,7 @@ export async function authRoutes(app: FastifyInstance) {
       data: {
         message: "Verification code sent",
         phone,
-        ...(config.env !== "production" ? { code } : {}),
+        ...(echo ? { code } : {}),
       },
     };
   });

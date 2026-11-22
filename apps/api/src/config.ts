@@ -31,4 +31,9 @@ export const config = {
   // so a public deployment doesn't use the documented demo password.
   seedDemoPassword: process.env.SEED_DEMO_PASSWORD || null,
   seedAdminEmail: process.env.SEED_ADMIN_EMAIL?.trim() || null,
+  // Return/log SMS sign-in codes (local demos only: anyone could sign in as any
+  // phone). Off unless SMS_DEV_ECHO=true; `npm run dev:api` turns it on.
+  get smsDevEcho(): boolean {
+    return readEnv("SMS_DEV_ECHO") === "true";
+  },
 };
