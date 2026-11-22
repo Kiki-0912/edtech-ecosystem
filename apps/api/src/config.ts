@@ -8,7 +8,13 @@ export const config = {
   port: Number.isFinite(parsedPort) ? parsedPort : 4000,
   corsOrigin: process.env.CORS_ORIGIN ?? "*",
   // Postgres connection string. Unset = seeded in-memory store (resets on restart).
-  databaseUrl: process.env.DATABASE_URL?.trim() || null,
+  // NETLIFY_DATABASE_URL is set automatically by Netlify DB (Neon).
+  databaseUrl:
+    process.env.DATABASE_URL?.trim() || process.env.NETLIFY_DATABASE_URL?.trim() || null,
   // Seed demo accounts/courses into an empty database (shared demo password!).
   seedDemoData: (process.env.SEED_DEMO_DATA ?? "true").toLowerCase() !== "false",
+  // Optional: password for every seeded account and email for the seeded admin,
+  // so a public deployment doesn't use the documented demo password.
+  seedDemoPassword: process.env.SEED_DEMO_PASSWORD || null,
+  seedAdminEmail: process.env.SEED_ADMIN_EMAIL?.trim() || null,
 };

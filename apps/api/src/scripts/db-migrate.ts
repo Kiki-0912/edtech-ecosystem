@@ -3,6 +3,7 @@
 // The API also does this on startup; this command is for deploy pipelines
 // and for checking a connection string before pointing the API at it.
 import { config } from "../config";
+import { hashPassword } from "../services/password";
 import { createPool, runMigrations, seedDatabase } from "../store/pg-store";
 
 if (!config.databaseUrl) {
@@ -18,7 +19,11 @@ try {
       ? `Applied migrations: ${applied.join(", ")}`
       : "Schema is up to date.",
   );
-  const { seededDemo } = await seedDatabase(pool, { includeDemo: config.seedDemoData });
+  const { seededDemo } = await seedDatabase(pool, {
+    includeDemo: config.seedDemoData,
+    passwordHash: config.seedDemoPassword ? hashPassword(config.seedDemoPassword) : undefined,
+    adminEmail: config.seedAdminEmail ?? undefined,
+  });
   console.log(
     seededDemo ? "Seeded demo accounts and courses." : "Reference data checked; no demo seed needed.",
   );

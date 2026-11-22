@@ -10,6 +10,7 @@ import type {
   IntegrityFlag,
   Role,
   Row,
+  SeedOptions,
   SignedTelemetryBatch,
   SubmissionStatus,
   Tables,
@@ -126,9 +127,9 @@ async function insertRows(db: Queryable, table: string, rows: Row[]): Promise<vo
  */
 export async function seedDatabase(
   pool: pg.Pool,
-  options: { includeDemo: boolean },
+  options: { includeDemo: boolean } & SeedOptions,
 ): Promise<{ seededDemo: boolean }> {
-  const seed: Tables = buildSeedRows();
+  const seed: Tables = buildSeedRows(options);
   return withTransaction(pool, async (client) => {
     await insertRows(client, "colleges", seed.colleges);
     const { rows } = await client.query("SELECT 1 FROM departments LIMIT 1");

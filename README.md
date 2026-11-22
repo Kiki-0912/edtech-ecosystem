@@ -238,6 +238,8 @@ Environment variables are documented in `apps/api/.env.example`:
 | `DATABASE_URL` | unset | Postgres connection string. Unset = in-memory store |
 | `DATABASE_POOL_MAX` | `5` | Max pooled connections per process |
 | `SEED_DEMO_DATA` | `true` | Seed the demo accounts into an empty database |
+| `SEED_DEMO_PASSWORD` | unset | Password for every seeded account instead of `password123` |
+| `SEED_ADMIN_EMAIL` | unset | Login email for the seeded admin |
 
 ### Database (PostgreSQL)
 
@@ -267,6 +269,28 @@ the API against a real Postgres engine (PGlite, in-process) with no server neede
 To change the schema, append a new migration to `MIGRATIONS`; never edit one
 that has already shipped. `apps/api/db/*.sql` is the old SQLite reference schema
 and is no longer used.
+
+### Deploy the API to Netlify
+
+The API runs as one Netlify Function (`apps/api/netlify/functions/api.mts`) that
+replays each request into the Fastify app, so behaviour matches the standalone
+server. `apps/api/netlify.toml` configures it as a monorepo package.
+
+```bash
+npm i -g netlify-cli && netlify login
+netlify sites:create --name <site-name>        # once; then `netlify link`
+netlify db init --filter @edtech/api           # Netlify DB (Neon): sets NETLIFY_DATABASE_URL
+netlify env:set AUTH_SECRET "$(openssl rand -hex 32)" --filter @edtech/api
+netlify env:set NODE_ENV production --filter @edtech/api
+netlify env:set SEED_DEMO_PASSWORD '<password>' --filter @edtech/api
+netlify env:set SEED_ADMIN_EMAIL '<admin email>' --filter @edtech/api
+netlify deploy --build --prod --filter @edtech/api
+```
+
+In the Netlify UI the site's Base directory is the repo root and its Package
+directory is `apps/api`. Claim the Netlify DB database in the dashboard, or it is
+deleted after the trial period. Check the deploy with `GET /health`: it should
+report `"storage":"postgres"`.
 
 ### Deploy the API to Vercel
 

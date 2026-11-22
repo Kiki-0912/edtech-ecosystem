@@ -1,15 +1,18 @@
+# Deploys the API as a single Netlify Function (netlify/functions/api.mts).
+# Monorepo site: Base directory = (repo root), Package directory = apps/api.
+# Paths below are relative to the repo root; deploy with
+#   netlify deploy --build --prod --filter @edtech/api
 [build]
-  command = "npm run build"
-  publish = "dist"
+  # Nothing static to build; the publish dir only needs to exist.
+  command = "mkdir -p apps/api/netlify/public"
+  publish = "apps/api/netlify/public"
 
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Content-Type-Options = "nosniff"
-    X-Frame-Options = "DENY"
-    Referrer-Policy = "strict-origin-when-cross-origin"
+[build.environment]
+  NODE_VERSION = "22"
 
-[[headers]]
-  for = "index.js"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+[functions]
+  directory = "apps/api/netlify/functions"
+  node_bundler = "esbuild"
+  # Load these from node_modules instead of bundling them (CommonJS deps with
+  # dynamic requires bundle poorly into an ESM function).
+  external_node_modules = ["fastify", "@fastify/cors", "pg"]

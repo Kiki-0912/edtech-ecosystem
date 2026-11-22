@@ -6,6 +6,7 @@
 // local development use. Both stores expose the same async functions.
 import type pg from "pg";
 import { config } from "../config";
+import { hashPassword } from "../services/password";
 import * as memory from "./memory-store";
 import { createPgStore, createPool, runMigrations, seedDatabase } from "./pg-store";
 
@@ -39,9 +40,17 @@ function memoryStore(): Store {
   return wrapped as Store;
 }
 
+/** Seed credentials from env, so a deployment need not use the public demo password. */
+function seedOptions(): memory.SeedOptions {
+  return {
+    passwordHash: config.seedDemoPassword ? hashPassword(config.seedDemoPassword) : undefined,
+    adminEmail: config.seedAdminEmail ?? undefined,
+  };
+}
+
 async function connect(): Promise<void> {
   if (!config.databaseUrl) {
-    await memory.initDb();
+    await memory.initDb(seedOptions());
     current = memoryStore();
     currentKind = "memory";
     return;
@@ -49,7 +58,7 @@ async function connect(): Promise<void> {
   const nextPool = createPool(config.databaseUrl);
   try {
     await runMigrations(nextPool);
-    await seedDatabase(nextPool, { includeDemo: config.seedDemoData });
+    await seedDatabase(nextPool, { includeDemo: config.seedDemoData, ...seedOptions() });
   } catch (error) {
     await nextPool.end().catch(() => {});
     throw error;

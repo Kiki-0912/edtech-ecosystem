@@ -24,7 +24,8 @@ integrity monitoring. It has four deployable pieces plus a shared types package.
 | `crates/telemetry-core/` | Rust 2021, serde | Native event model and effort-scoring engine (cdylib/staticlib/rlib) |
 | `.github/workflows/ci.yml` | | CI. Keep it green; it defines the required checks |
 
-Deploy targets: Vercel (API, `vercel.json`), Netlify (Flutter web, `netlify.toml`),
+Deploy targets: Netlify API (`apps/api/netlify.toml` + `apps/api/netlify/functions/api.mts`,
+deploy with `--filter @edtech/api`), Vercel (API, `vercel.json`), Netlify (Flutter web, root `netlify.toml`),
 Docker (`Dockerfile`, `docker-compose.yml`, API on port 4000).
 
 ## Commands (run from repo root unless noted)
@@ -61,7 +62,7 @@ cargo fmt --manifest-path crates/telemetry-core/Cargo.toml -- --check
 ```
 
 Baseline after the Postgres work (2026-11-22): typecheck clean; `npm run test:api`
-25 pass (10 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
+39 pass (10 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
 included); `flutter test` ~89 pass, with `api_integration_test.dart` skipping
 unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
 `cargo fmt --check` clean. CI runs Node 22 (`node --test` globs need Node ≥ 21).

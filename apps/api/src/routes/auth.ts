@@ -13,6 +13,7 @@ import {
   markPhoneVerified,
 } from "../store/db";
 import { config } from "../config";
+import { hashPassword, verifyPassword } from "../services/password";
 
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
@@ -23,25 +24,7 @@ const fail = (
   message: string,
 ) => reply.code(statusCode).send({ error: { code, message } } satisfies ApiError);
 
-/* ---------- password hashing (scrypt with per-user salt) ---------- */
-
-export function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const derived = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt$${salt}$${derived}`;
-}
-
-export function verifyPassword(password: string, stored: string): boolean {
-  const [scheme, salt, hash] = stored.split("$");
-  if (scheme !== "scrypt" || !salt || !hash) {
-    return false;
-  }
-  const derived = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, "hex");
-  return (
-    derived.length === expected.length && crypto.timingSafeEqual(derived, expected)
-  );
-}
+export { hashPassword, verifyPassword } from "../services/password";
 
 /* ---------- signed bearer tokens (HMAC-SHA256) ---------- */
 
