@@ -62,7 +62,7 @@ cargo fmt --manifest-path crates/telemetry-core/Cargo.toml -- --check
 ```
 
 Baseline after the Postgres work (2026-11-22): typecheck clean; `npm run test:api`
-39 pass (10 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
+42 pass (13 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
 included); `flutter test` ~89 pass, with `api_integration_test.dart` skipping
 unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
 `cargo fmt --check` clean. CI runs Node 22 (`node --test` globs need Node ≥ 21).
@@ -114,7 +114,9 @@ unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
 - **Persistence** goes through `store/db.ts`. A new store function must be added
   to `memory-store.ts` **and** `pg-store.ts` (the `Store` type enforces parity)
   and called with `await`. Schema changes are a new entry in `migrations.ts`,
-  never an edit to a shipped one. Timestamps are ISO TEXT so client local times
+  never an edit to a shipped one, then `npm run db:netlify-migrations
+  --workspace @edtech/api` (Netlify applies those generated files at deploy;
+  `netlify-database.test.ts` fails if they drift). Timestamps are ISO TEXT so client local times
   round-trip unchanged. Without `DATABASE_URL` (tests, Vercel unconfigured)
   state is in-memory and resets on restart.
 - The Fastify error handler must be registered before the route plugins

@@ -16,3 +16,9 @@
   # Load these from node_modules instead of bundling them (CommonJS deps with
   # dynamic requires bundle poorly into an ESM function).
   external_node_modules = ["fastify", "@fastify/cors", "pg"]
+
+# Netlify Database: provisioned because @netlify/database is a dependency.
+# These migrations are generated from src/store/migrations.ts
+# (`npm run db:netlify-migrations`) and applied by Netlify at deploy time.
+[database.migrations]
+  path = "apps/api/netlify/database/migrations"

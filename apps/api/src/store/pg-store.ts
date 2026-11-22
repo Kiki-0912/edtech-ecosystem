@@ -16,7 +16,7 @@ import type {
   Tables,
 } from "./memory-store";
 import { buildSeedRows, mappers } from "./memory-store";
-import { MIGRATIONS } from "./migrations";
+import { MIGRATIONS, SCHEMA_MIGRATIONS_DDL } from "./migrations";
 
 const {
   toAssignment,
@@ -68,23 +68,47 @@ async function withTransaction<T>(
   }
 }
 
-/** Apply pending migrations. Safe to call from several processes at once. */
+/** Versions recorded in `schema_migrations`, or null if the table doesn't exist. */
+async function appliedVersions(db: Queryable): Promise<Set<number> | null> {
+  const { rows } = await db.query<{ exists: boolean }>(
+    "SELECT to_regclass('schema_migrations') IS NOT NULL AS exists",
+  );
+  if (!rows[0]?.exists) return null;
+  const applied = await db.query<{ version: number }>("SELECT version FROM schema_migrations");
+  return new Set(applied.rows.map((row) => row.version));
+}
+
+/**
+ * Apply pending migrations. Safe to call from several processes at once.
+ *
+ * When everything is already applied it only reads `schema_migrations`, so it
+ * also works for database roles that may not change the schema (Netlify
+ * Database applies `netlify/database/migrations` at deploy time instead).
+ */
 export async function runMigrations(pool: pg.Pool): Promise<number[]> {
+  const before = await appliedVersions(pool);
+  if (before && MIGRATIONS.every((migration) => before.has(migration.version))) {
+    return [];
+  }
+
   const client = await pool.connect();
   const applied: number[] = [];
   try {
+    const { rows } = await client.query<{ can_create: boolean }>(
+      "SELECT has_schema_privilege(current_schema(), 'CREATE') AS can_create",
+    );
+    if (!rows[0]?.can_create) {
+      const pending = MIGRATIONS.filter((m) => !before?.has(m.version)).map((m) => m.version);
+      throw new Error(
+        `Pending migrations ${pending.join(", ")} cannot be applied: this database role may ` +
+          "not change the schema. On Netlify they are applied at deploy from " +
+          "apps/api/netlify/database/migrations (npm run db:netlify-migrations).",
+      );
+    }
+
     await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_ID]);
-    await client.query(
-      `CREATE TABLE IF NOT EXISTS schema_migrations (
-         version INTEGER PRIMARY KEY,
-         name TEXT NOT NULL,
-         applied_at TEXT NOT NULL
-       )`,
-    );
-    const { rows } = await client.query<{ version: number }>(
-      "SELECT version FROM schema_migrations",
-    );
-    const done = new Set(rows.map((row) => row.version));
+    await client.query(SCHEMA_MIGRATIONS_DDL);
+    const done = (await appliedVersions(client)) ?? new Set<number>();
     for (const migration of MIGRATIONS) {
       if (done.has(migration.version)) continue;
       await client.query("BEGIN");

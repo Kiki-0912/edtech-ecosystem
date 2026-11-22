@@ -12,7 +12,8 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test 'test/**/*.test.ts'",
-    "db:migrate": "tsx src/scripts/db-migrate.ts"
+    "db:migrate": "tsx src/scripts/db-migrate.ts",
+    "db:netlify-migrations": "tsx src/scripts/netlify-migrations.ts"
   },
   "dependencies": {
     "@fastify/cors": "^10.0.2",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.17",
     "@electric-sql/pglite-socket": "^0.2.20",
+    "@netlify/database": "^2.0.3",
     "@types/node": "^22.10.7",
     "@types/pg": "^8.23.1",
     "tsup": "^8.3.5",

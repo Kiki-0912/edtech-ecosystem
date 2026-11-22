@@ -276,21 +276,29 @@ The API runs as one Netlify Function (`apps/api/netlify/functions/api.mts`) that
 replays each request into the Fastify app, so behaviour matches the standalone
 server. `apps/api/netlify.toml` configures it as a monorepo package.
 
+**Database:** Netlify Database (built-in Postgres). Because `@netlify/database`
+is a dependency of `apps/api`, every build provisions the site's database and
+Netlify applies `apps/api/netlify/database/migrations` at deploy time with the
+owner role. Functions receive `NETLIFY_DB_URL` (read by `config.ts`); that role
+reads and writes data, and the API's own runner just confirms the schema is
+current. Those migration files are generated from `src/store/migrations.ts`:
+after adding a migration run `npm run db:netlify-migrations --workspace
+@edtech/api` (a test fails if you forget). Don't set `DATABASE_URL` on the site:
+it overrides `NETLIFY_DB_URL`, and the connection string the Netlify API hands
+to a personal token is read-only.
+
 ```bash
 npm i -g netlify-cli && netlify login
-netlify sites:create --name <site-name>        # once; then `netlify link`
-netlify db init --filter @edtech/api           # Netlify DB (Neon): sets NETLIFY_DATABASE_URL
-netlify env:set AUTH_SECRET "$(openssl rand -hex 32)" --filter @edtech/api
-netlify env:set NODE_ENV production --filter @edtech/api
-netlify env:set SEED_DEMO_PASSWORD '<password>' --filter @edtech/api
-netlify env:set SEED_ADMIN_EMAIL '<admin email>' --filter @edtech/api
+netlify sites:create --name <site-name> --disable-linking
+netlify link --id <site-id> --filter @edtech/api
+netlify env:set AUTH_SECRET "$(openssl rand -hex 32)" --site <site-id> --context production --secret
+netlify env:set SEED_DEMO_PASSWORD '<password>' --site <site-id> --context production --secret
+netlify env:set SEED_ADMIN_EMAIL '<admin email>' --site <site-id>
+netlify env:set NODE_ENV production --site <site-id> --scope functions
 netlify deploy --build --prod --filter @edtech/api
 ```
 
-In the Netlify UI the site's Base directory is the repo root and its Package
-directory is `apps/api`. Claim the Netlify DB database in the dashboard, or it is
-deleted after the trial period. Check the deploy with `GET /health`: it should
-report `"storage":"postgres"`.
+Check the deploy with `GET /health`: it should report `"storage":"postgres"`.
 
 ### Deploy the API to Vercel
 
