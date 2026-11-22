@@ -1,4 +1,10 @@
 import { buildApp } from "./create-app";
+
+// `npm run dev:api` passes this so local demos can sign in with SMS codes
+// (a flag rather than an env var, so the script works in PowerShell too).
+if (process.argv.includes("--sms-dev-echo")) {
+  process.env.SMS_DEV_ECHO ??= "true";
+}
 import { config } from "./config";
 
 const app = await buildApp();

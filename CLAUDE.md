@@ -24,7 +24,9 @@ integrity monitoring. It has four deployable pieces plus a shared types package.
 | `crates/telemetry-core/` | Rust 2021, serde | Native event model and effort-scoring engine (cdylib/staticlib/rlib) |
 | `.github/workflows/ci.yml` | | CI. Keep it green; it defines the required checks |
 
-Deploy targets: Vercel (API, `vercel.json`), Netlify (Flutter web, `netlify.toml`),
+Deploy targets: Netlify API (`apps/api/netlify.toml`; `netlify/functions/api.mts` re-exports an
+esbuild bundle of `src/netlify-handler.ts` built by `npm run build:netlify` — Netlify's Lambda can't
+`require()` ESM, so never ship Fastify unbundled; deploy with `--filter @edtech/api`), Vercel (API, `vercel.json`), Netlify (Flutter web, root `netlify.toml`),
 Docker (`Dockerfile`, `docker-compose.yml`, API on port 4000).
 
 ## Commands (run from repo root unless noted)
@@ -61,7 +63,7 @@ cargo fmt --manifest-path crates/telemetry-core/Cargo.toml -- --check
 ```
 
 Baseline after the Postgres work (2026-11-22): typecheck clean; `npm run test:api`
-25 pass (10 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
+42 pass (13 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
 included); `flutter test` ~89 pass, with `api_integration_test.dart` skipping
 unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
 `cargo fmt --check` clean. CI runs Node 22 (`node --test` globs need Node ≥ 21).
@@ -113,7 +115,9 @@ unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
 - **Persistence** goes through `store/db.ts`. A new store function must be added
   to `memory-store.ts` **and** `pg-store.ts` (the `Store` type enforces parity)
   and called with `await`. Schema changes are a new entry in `migrations.ts`,
-  never an edit to a shipped one. Timestamps are ISO TEXT so client local times
+  never an edit to a shipped one, then `npm run db:netlify-migrations
+  --workspace @edtech/api` (Netlify applies those generated files at deploy;
+  `netlify-database.test.ts` fails if they drift). Timestamps are ISO TEXT so client local times
   round-trip unchanged. Without `DATABASE_URL` (tests, Vercel unconfigured)
   state is in-memory and resets on restart.
 - The Fastify error handler must be registered before the route plugins

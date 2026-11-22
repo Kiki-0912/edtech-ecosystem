@@ -9,6 +9,7 @@ import type {
 import {
   createTelemetryBatch,
   getAssignment,
+  getCourse,
   getEffortScore,
   getIntegrityFlags,
   getSubmission,
@@ -110,6 +111,18 @@ export async function telemetryRoutes(app: FastifyInstance) {
         );
       }
 
+      // The signature only proves the sender held the key it sent, so identity
+      // comes from the bearer token: students upload only their own telemetry.
+      const caller = (request as { user?: { id: string; role?: string } }).user;
+      if (!caller || caller.id !== batch.studentId) {
+        return fail(
+          reply,
+          403,
+          "FORBIDDEN",
+          "Telemetry can only be uploaded for your own account",
+        );
+      }
+
       // ---- Signature verification (new hardening step) ----
       const sigCheck = verifyBatchSignature(batch);
       if (!sigCheck.ok) {
@@ -181,6 +194,26 @@ export async function telemetryRoutes(app: FastifyInstance) {
     "/integrity/:assignmentId/:studentId",
     async (request, reply) => {
       const { assignmentId, studentId } = request.params;
+
+      // Students see only their own report; teachers only for courses they
+      // teach; admins see everything.
+      const caller = (request as { user?: { id: string; role?: string } }).user;
+      if (caller?.role === "student" && caller.id !== studentId) {
+        return fail(reply, 403, "FORBIDDEN", "Students can only view their own report");
+      }
+      if (caller?.role === "teacher") {
+        const assignment = await getAssignment(assignmentId);
+        if (!assignment) {
+          return fail(reply, 404, "ASSIGNMENT_NOT_FOUND", "Assignment not found");
+        }
+        const course = await getCourse(assignment.courseId);
+        if (course?.teacherId !== caller.id) {
+          return fail(reply, 403, "FORBIDDEN", "You do not teach this course");
+        }
+      } else if (caller?.role !== "student" && caller?.role !== "admin") {
+        return fail(reply, 403, "FORBIDDEN", "Insufficient role for this route");
+      }
+
       const score = await getEffortScore(studentId, assignmentId);
 
       if (!score) {

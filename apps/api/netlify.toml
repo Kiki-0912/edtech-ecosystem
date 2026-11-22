@@ -1,15 +1,23 @@
+# Deploys the API as a single Netlify Function (netlify/functions/api.mts).
+# Monorepo site: Base directory = (repo root), Package directory = apps/api.
+# Paths below are relative to the repo root; deploy with
+#   netlify deploy --build --prod --filter @edtech/api
 [build]
-  command = "npm run build"
-  publish = "dist"
+  # Bundle the function handler (see src/scripts/build-netlify-handler.ts);
+  # nothing static is published, the publish dir only needs to exist.
+  command = "npm run build:netlify --workspace @edtech/api && mkdir -p apps/api/netlify/public"
+  publish = "apps/api/netlify/public"
 
-[[headers]]
-  for = "/*"
-  [headers.values]
-    X-Content-Type-Options = "nosniff"
-    X-Frame-Options = "DENY"
-    Referrer-Policy = "strict-origin-when-cross-origin"
+[build.environment]
+  NODE_VERSION = "22"
 
-[[headers]]
-  for = "index.js"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+[functions]
+  directory = "apps/api/netlify/functions"
+  # Netlify only traces files for this function; the handler it imports is
+  # already an esbuild bundle that leaves `pg` external (traced from node_modules).
+
+# Netlify Database: provisioned because @netlify/database is a dependency.
+# These migrations are generated from src/store/migrations.ts
+# (`npm run db:netlify-migrations`) and applied by Netlify at deploy time.
+[database.migrations]
+  path = "apps/api/netlify/database/migrations"

@@ -238,6 +238,8 @@ Environment variables are documented in `apps/api/.env.example`:
 | `DATABASE_URL` | unset | Postgres connection string. Unset = in-memory store |
 | `DATABASE_POOL_MAX` | `5` | Max pooled connections per process |
 | `SEED_DEMO_DATA` | `true` | Seed the demo accounts into an empty database |
+| `SEED_DEMO_PASSWORD` | unset | Password for every seeded account instead of `password123` |
+| `SEED_ADMIN_EMAIL` | unset | Login email for the seeded admin |
 
 ### Database (PostgreSQL)
 
@@ -267,6 +269,40 @@ the API against a real Postgres engine (PGlite, in-process) with no server neede
 To change the schema, append a new migration to `MIGRATIONS`; never edit one
 that has already shipped. `apps/api/db/*.sql` is the old SQLite reference schema
 and is no longer used.
+
+### Deploy the API to Netlify
+
+The API runs as one Netlify Function (`apps/api/netlify/functions/api.mts`) that
+replays each request into the Fastify app, so behaviour matches the standalone
+server. `apps/api/netlify.toml` configures it as a monorepo package. The build
+command bundles the handler with esbuild (`npm run build:netlify`): Netlify's
+Lambda runtime cannot `require()` ES modules, which Fastify's inject dependency
+needs, so the function must ship that bundle rather than plain `node_modules`.
+
+**Database:** Netlify Database (built-in Postgres). Because `@netlify/database`
+is a dependency of `apps/api`, every build provisions the site's database and
+Netlify applies `apps/api/netlify/database/migrations` at deploy time with the
+owner role. Functions receive `NETLIFY_DB_URL` (read by `config.ts`); that role
+reads and writes data, and the API's own runner just confirms the schema is
+current. Those migration files are generated from `src/store/migrations.ts`:
+after adding a migration run `npm run db:netlify-migrations --workspace
+@edtech/api` (a test fails if you forget). Don't set `DATABASE_URL` on the site:
+it overrides `NETLIFY_DB_URL`, and the connection string the Netlify API hands
+to a personal token is read-only.
+
+```bash
+npm i -g netlify-cli && netlify login
+netlify sites:create --name <site-name> --disable-linking
+netlify link --id <site-id> --filter @edtech/api
+netlify env:set AUTH_SECRET "$(openssl rand -hex 32)" --site <site-id> --context production --secret
+netlify env:set SEED_DEMO_PASSWORD '<password>' --site <site-id> --context production --secret
+netlify env:set SEED_ADMIN_EMAIL '<admin email>' --site <site-id>
+netlify deploy --build --prod --filter @edtech/api
+```
+
+Check the deploy with `GET /health`: it should report `"storage":"postgres"`.
+Never set `SMS_DEV_ECHO` on a deployment: it returns SMS sign-in codes in API
+responses (local demos only; `npm run dev:api` enables it).
 
 ### Deploy the API to Vercel
 

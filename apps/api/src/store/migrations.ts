@@ -11,6 +11,36 @@
 //
 // Never edit a migration that has shipped; append a new one instead.
 
+/** Bookkeeping table shared by the API's runner and the Netlify migration files. */
+export const SCHEMA_MIGRATIONS_DDL = `CREATE TABLE IF NOT EXISTS schema_migrations (
+  version INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  applied_at TEXT NOT NULL
+)`;
+
+/**
+ * SQL for Netlify Database's deploy-time migration file for one migration:
+ * the schema change plus its `schema_migrations` record, so the API's runner
+ * sees it as applied. Generated into apps/api/netlify/database/migrations.
+ */
+export function netlifyMigrationSql(migration: Migration): string {
+  return `-- Generated from apps/api/src/store/migrations.ts by \`npm run db:netlify-migrations\`.
+-- Do not edit by hand.
+${SCHEMA_MIGRATIONS_DDL};
+${migration.sql.trim()}
+
+INSERT INTO schema_migrations (version, name, applied_at)
+VALUES (${migration.version}, '${migration.name}',
+        to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+ON CONFLICT (version) DO NOTHING;
+`;
+}
+
+/** Folder name Netlify expects: zero-padded sequence + slug. */
+export function netlifyMigrationDir(migration: Migration): string {
+  return `${String(migration.version).padStart(4, "0")}_${migration.name.replaceAll("_", "-")}`;
+}
+
 export interface Migration {
   version: number;
   name: string;

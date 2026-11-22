@@ -361,16 +361,23 @@ function normDate(value: unknown): string | null {
 
 /** Demo seed data as snake_case rows. Column names match the Postgres schema,
  *  so the same rows seed both the in-memory store and a fresh database. */
-export function buildSeedRows(): Tables {
+export interface SeedOptions {
+  /** scrypt hash for every seeded account (default: the public demo password). */
+  passwordHash?: string;
+  /** Login email for the seeded admin account. */
+  adminEmail?: string;
+}
+
+export function buildSeedRows(options: SeedOptions = {}): Tables {
   const db = emptyTables();
   db.users = seedUsers.map((user) => ({
     id: user.id,
     display_name: user.displayName,
-    email: user.email,
+    email: user.role === "admin" && options.adminEmail ? options.adminEmail : user.email,
     phone: user.phone,
     role: user.role,
     course_ids: JSON.stringify(user.courseIds),
-    password_hash: DEMO_PASSWORD_HASH,
+    password_hash: options.passwordHash ?? DEMO_PASSWORD_HASH,
     is_phone_verified: 1,
     created_at: user.createdAt,
   }));
@@ -526,14 +533,14 @@ export function buildSeedRows(): Tables {
   return db;
 }
 
-function seedDatabase() {
-  db = buildSeedRows();
+function seedDatabase(options: SeedOptions) {
+  db = buildSeedRows(options);
 }
 
-export async function initDb(): Promise<void> {
+export async function initDb(options: SeedOptions = {}): Promise<void> {
   if (initialized) return;
   initialized = true;
-  seedDatabase();
+  seedDatabase(options);
 }
 
 // ============================================

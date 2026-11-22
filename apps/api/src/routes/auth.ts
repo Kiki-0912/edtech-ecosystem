@@ -13,6 +13,7 @@ import {
   markPhoneVerified,
 } from "../store/db";
 import { config } from "../config";
+import { hashPassword, verifyPassword } from "../services/password";
 
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
@@ -23,25 +24,7 @@ const fail = (
   message: string,
 ) => reply.code(statusCode).send({ error: { code, message } } satisfies ApiError);
 
-/* ---------- password hashing (scrypt with per-user salt) ---------- */
-
-export function hashPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const derived = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt$${salt}$${derived}`;
-}
-
-export function verifyPassword(password: string, stored: string): boolean {
-  const [scheme, salt, hash] = stored.split("$");
-  if (scheme !== "scrypt" || !salt || !hash) {
-    return false;
-  }
-  const derived = crypto.scryptSync(password, salt, 64);
-  const expected = Buffer.from(hash, "hex");
-  return (
-    derived.length === expected.length && crypto.timingSafeEqual(derived, expected)
-  );
-}
+export { hashPassword, verifyPassword } from "../services/password";
 
 /* ---------- signed bearer tokens (HMAC-SHA256) ---------- */
 
@@ -232,9 +215,11 @@ export async function authRoutes(app: FastifyInstance) {
       expiresAt,
     });
 
-    // In production an SMS provider (Twilio/Vonage) would deliver this code.
-    // The code is only echoed outside production to support local demos.
-    if (config.env !== "production") {
+    // A real SMS provider (Twilio/Vonage) would deliver this code. Returning or
+    // logging it lets anyone sign in as that phone, so it happens only when a
+    // local demo opts in explicitly (never by default, whatever NODE_ENV is).
+    const echo = config.smsDevEcho;
+    if (echo) {
       app.log.info({ phone }, `SMS verification code: ${code}`);
     }
 
@@ -242,7 +227,7 @@ export async function authRoutes(app: FastifyInstance) {
       data: {
         message: "Verification code sent",
         phone,
-        ...(config.env !== "production" ? { code } : {}),
+        ...(echo ? { code } : {}),
       },
     };
   });
