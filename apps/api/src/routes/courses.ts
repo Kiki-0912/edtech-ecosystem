@@ -26,11 +26,11 @@ export async function courseRoutes(app: FastifyInstance) {
   // Live college profile: name + departments served from the in-memory store
   // so the app always reflects the current data.
   app.get("/college", async () => {
-    const college = getColleges()[0];
+    const college = (await getColleges())[0];
     if (!college) {
       return { data: null };
     }
-    const departments = getDepartments(college.id);
+    const departments = await getDepartments(college.id);
     return {
       data: {
         ...college,

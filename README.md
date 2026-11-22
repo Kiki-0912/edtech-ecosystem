@@ -11,7 +11,7 @@ A converted Word copy is available at [`Project_Proposal.docx`](./Project_Propos
 
 | Area | Status |
 | --- | --- |
-| API (`apps/api`) | Working Fastify 5 + TypeScript service with a seeded in-memory store; auth uses scrypt passwords, HMAC-signed tokens, and SMS verification codes |
+| API (`apps/api`) | Working Fastify 5 + TypeScript service backed by PostgreSQL (`DATABASE_URL`), with a seeded in-memory fallback; auth uses scrypt passwords, HMAC-signed tokens, and SMS verification codes |
 | Browser extension (`apps/extension`) | Manifest v0.2.0: consent-gated telemetry, signed batch upload to the API, options page with account login, retry queue |
 | Flutter app (`apps/app`) | Login / signup / SMS verification, auth-gated routing, live courses, calendar, chat, integrity screens; also builds as a standalone offline Android APK with admin calendar editing, students, departments, attendance, notes and Excel import/export |
 | Rust core (`crates/telemetry-core`) | Event model, effort scoring, integrity flags, and unit tests; not yet compiled in this environment |
@@ -60,7 +60,11 @@ apps/api/src
 │                           attendance, notes, Excel, and telemetry routes
 ├── services/effort.ts      Effort metrics, score, and flags
 └── store/
-    ├── db.ts               Seeded in-memory data layer and CRUD helpers
+    ├── db.ts               Data-access facade: Postgres if DATABASE_URL is set,
+    │                       otherwise the in-memory store
+    ├── pg-store.ts         Postgres implementation, migration runner, seeding
+    ├── migrations.ts       Versioned Postgres schema migrations
+    ├── memory-store.ts     Seeded in-memory store and row mappers
     └── memory.ts           Demo seed data
 ```
 
@@ -231,11 +235,38 @@ Environment variables are documented in `apps/api/.env.example`:
 | `PORT` | `4000` | HTTP port |
 | `CORS_ORIGIN` | `*` | Allowed CORS origin |
 | `AUTH_SECRET` | dev-only fallback | HMAC key for bearer tokens; **set this in production** |
+| `DATABASE_URL` | unset | Postgres connection string. Unset = in-memory store |
+| `DATABASE_POOL_MAX` | `5` | Max pooled connections per process |
+| `SEED_DEMO_DATA` | `true` | Seed the demo accounts into an empty database |
 
-The API keeps its data in an in-memory store seeded from
-`apps/api/src/store/memory.ts` on every cold start. No database file or native
-module is required. Restarting the process resets all writes, including
-registrations, attendance, notes, calendar edits, and chat messages.
+### Database (PostgreSQL)
+
+With `DATABASE_URL` set, the API stores everything in Postgres. On startup it
+applies any pending migrations (`apps/api/src/store/migrations.ts`, tracked in
+`schema_migrations`, guarded by an advisory lock) and seeds an empty database:
+the college and its 18 departments always, plus the demo accounts and course
+when `SEED_DEMO_DATA` is not `false`. `GET /health` reports `"storage":
+"postgres"` and whether the database is reachable.
+
+Local Postgres with Docker:
+
+```bash
+npm run db:up                       # postgres:17 on localhost:5432 (docker-compose)
+export DATABASE_URL=postgresql://edtech:edtech@localhost:5432/edtech
+npm run db:migrate                  # optional: the API also migrates on start
+npm run dev:api
+```
+
+`docker compose up` starts both Postgres and the API, already wired together.
+
+Without `DATABASE_URL` the API falls back to the in-memory store seeded from
+`apps/api/src/store/memory.ts`. Restarting the process then resets all writes.
+Tests use the in-memory store, plus `test/postgres-store.test.ts`, which runs
+the API against a real Postgres engine (PGlite, in-process) with no server needed.
+
+To change the schema, append a new migration to `MIGRATIONS`; never edit one
+that has already shipped. `apps/api/db/*.sql` is the old SQLite reference schema
+and is no longer used.
 
 ### Deploy the API to Vercel
 
@@ -252,6 +283,10 @@ project so Vercel detects `apps/api/src/index.ts` as the function entry point:
      `openssl rand -hex 32`); required in production.
    - `CORS_ORIGIN` — `*` for a demo, or the exact web app origin.
    - `NODE_ENV` — `production`.
+   - `DATABASE_URL` — a hosted Postgres connection string (for example a free
+     Neon or Supabase database; append `?sslmode=require` if the provider
+     needs it). Prefer the provider's *pooled* connection string.
+   - `SEED_DEMO_DATA` — `false` for real use (the demo password is public).
 6. Deploy. Vercel routes every request to the single Fastify function.
 
 CLI alternative:
@@ -261,6 +296,7 @@ cd apps/api
 npx vercel link
 npx vercel env add AUTH_SECRET production
 npx vercel env add CORS_ORIGIN production
+npx vercel env add DATABASE_URL production
 npx vercel --prod
 ```
 
@@ -276,9 +312,9 @@ Invoke-RestMethod "$api/api/v1/auth/login" -Method Post `
   -ContentType "application/json" -Body $body
 ```
 
-> **Vercel storage is ephemeral.** The store is re-seeded on each cold start and
-> is not shared between function instances. Use an external database such as
-> Postgres or Turso/libSQL if production data must persist.
+> **Set `DATABASE_URL` on Vercel.** Without it the API runs on the in-memory
+> store, which is re-seeded on each cold start and not shared between function
+> instances.
 
 The repository root is not a deployable Vercel project. Always set the project's
 Root Directory to `apps/api` (or run the CLI from that folder). If an existing

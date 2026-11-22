@@ -20,7 +20,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
     '/departments',
     { preHandler: [authenticate] },
     async (request, reply) => {
-      const departments = getDepartments('col-cttc');
+      const departments = await getDepartments('col-cttc');
       return reply.send({ data: departments });
     }
   );
@@ -31,7 +31,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const students = getStudentsByDepartment((req.params as { id: string }).id);
+      const students = await getStudentsByDepartment((req.params as { id: string }).id);
       return reply.send({ data: students });
     }
   );
@@ -53,7 +53,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
         category: DepartmentCategory;
         durationMonths: number;
       };
-      const department = createDepartment({
+      const department = await createDepartment({
         collegeId: body.collegeId ?? 'col-cttc',
         name: body.name,
         code: body.code,
@@ -80,7 +80,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
         category: DepartmentCategory;
         durationMonths: number;
       }>;
-      const department = updateDepartment(
+      const department = await updateDepartment(
         (req.params as { id: string }).id,
         body,
       );
@@ -103,7 +103,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
-      const removed = deleteDepartment((req.params as { id: string }).id);
+      const removed = await deleteDepartment((req.params as { id: string }).id);
       if (!removed) {
         return reply.code(404).send({
           error: { code: 'NOT_FOUND', message: 'Department not found' },
@@ -119,7 +119,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const departments = getDepartmentsByStudent((req.params as { studentId: string }).studentId);
+      const departments = await getDepartmentsByStudent((req.params as { studentId: string }).studentId);
       return reply.send({ data: departments });
     }
   );
@@ -135,7 +135,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
       const body = request.body as { departmentId: string };
-      const enrollment = enrollStudentInDepartment({
+      const enrollment = await enrollStudentInDepartment({
         studentId: (req.params as { studentId: string }).studentId,
         departmentId: body.departmentId,
         enrolledBy: caller?.id ?? (req.params as { studentId: string }).studentId,
@@ -154,7 +154,7 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
-      unenrollStudentFromDepartment(
+      await unenrollStudentFromDepartment(
         (req.params as { studentId: string }).studentId,
         (req.params as { departmentId: string }).departmentId,
       );

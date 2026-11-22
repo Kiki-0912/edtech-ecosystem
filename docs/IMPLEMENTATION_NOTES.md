@@ -338,3 +338,33 @@ submissions, department/calendar/note/student CRUD, and signed telemetry
 **Storage caveat:** the in-memory store is re-seeded on every cold start and is
 not shared between function instances. Production persistence requires an
 external database such as Postgres or Turso/libSQL.
+
+## 10. Session 4 (2026-11-22): PostgreSQL persistence
+
+1. Split the data layer: `store/memory-store.ts` (the previous in-memory store),
+   `store/pg-store.ts` (Postgres via `pg`), and `store/db.ts`, a facade that picks
+   Postgres when `DATABASE_URL` is set. Both implement one async `Store` type
+   derived from the memory store, so the compiler enforces parity.
+2. Schema lives in `store/migrations.ts` (embedded SQL, so the Vercel bundle needs
+   no file access). Migrations run on startup under an advisory lock and are
+   tracked in `schema_migrations`; `npm run db:migrate` runs them explicitly.
+   An empty database is seeded from the same rows as the memory store
+   (`buildSeedRows()`); demo accounts are skipped with `SEED_DEMO_DATA=false`.
+3. Timestamps stay ISO-8601 TEXT so local times from the Flutter client round-trip
+   unchanged; arrays (course/student/member ids, attachments, events) are JSONB;
+   every table has a `seq` column so listings keep insertion order.
+4. Routes now `await` every store call (several student, department, attendance,
+   notes, Excel and calendar writes were previously fire-and-forget).
+   Telemetry batch inserts are idempotent on `batchId` (extension retries).
+5. Fixed: the custom error handler was registered after the routes, so route
+   errors used Fastify's default body instead of the `{ error: { code, message } }`
+   envelope. Postgres constraint violations now map to 409/400.
+6. `/health` reports `storage` and `database`; SIGINT/SIGTERM close the pool.
+7. `docker-compose.yml` now runs `postgres:17-alpine` alongside the API.
+
+Verified: typecheck, `tsup` build, `npm run test:api` (25 pass, including 10
+against Postgres via PGlite), `db:migrate` twice (idempotent), the built server
+against Postgres with data surviving a restart, and the Flutter
+`api_integration_test.dart` (10 pass) against the Postgres-backed API. The
+docker-compose stack itself was not run (no Docker daemon on this machine).
+

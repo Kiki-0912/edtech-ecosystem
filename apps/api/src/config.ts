@@ -7,4 +7,8 @@ export const config = {
   host: process.env.HOST ?? "0.0.0.0",
   port: Number.isFinite(parsedPort) ? parsedPort : 4000,
   corsOrigin: process.env.CORS_ORIGIN ?? "*",
+  // Postgres connection string. Unset = seeded in-memory store (resets on restart).
+  databaseUrl: process.env.DATABASE_URL?.trim() || null,
+  // Seed demo accounts/courses into an empty database (shared demo password!).
+  seedDemoData: (process.env.SEED_DEMO_DATA ?? "true").toLowerCase() !== "false",
 };

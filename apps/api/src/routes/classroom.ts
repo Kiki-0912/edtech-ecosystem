@@ -52,7 +52,7 @@ export async function classroomRoutes(app: FastifyInstance) {
       courseIds = new Set((await getCourses()).map((course) => course.id));
     }
 
-    return { data: getCalendarEvents(courseIds, departmentId) };
+    return { data: await getCalendarEvents(courseIds, departmentId) };
   });
 
   app.post<{
@@ -83,7 +83,7 @@ export async function classroomRoutes(app: FastifyInstance) {
       );
     }
 
-    const event = createCalendarEvent({
+    const event = await createCalendarEvent({
       title,
       kind,
       startsAt,
@@ -112,7 +112,7 @@ export async function classroomRoutes(app: FastifyInstance) {
       return fail(reply, 403, "FORBIDDEN", "Admin or teacher only");
     }
 
-    const event = updateCalendarEvent(request.params.eventId, request.body ?? {});
+    const event = await updateCalendarEvent(request.params.eventId, request.body ?? {});
     if (!event) {
       return fail(reply, 404, "EVENT_NOT_FOUND", "Calendar event not found");
     }
@@ -129,7 +129,7 @@ export async function classroomRoutes(app: FastifyInstance) {
         return fail(reply, 403, "FORBIDDEN", "Admin or teacher only");
       }
 
-      if (!deleteCalendarEvent(request.params.eventId)) {
+      if (!(await deleteCalendarEvent(request.params.eventId))) {
         return fail(reply, 404, "EVENT_NOT_FOUND", "Calendar event not found");
       }
       return { data: { success: true } };
