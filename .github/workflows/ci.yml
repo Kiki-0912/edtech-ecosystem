@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
       - run: npm ci --workspace @edtech/api --workspace @edtech/shared
       - run: npm run typecheck --workspaces --if-present
@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
       - run: npm ci --workspace @edtech/api --workspace @edtech/shared
       - run: npm run build:api
@@ -40,7 +40,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: node --check apps/extension/src/background.js
       - run: node --check apps/extension/src/content.js
       - run: node --check apps/extension/src/popup.js
@@ -56,8 +56,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - run: flutter pub get --directory apps/app
-      - run: flutter analyze --directory apps/app
+      - run: flutter pub get
+        working-directory: apps/app
+      - run: flutter analyze
+        working-directory: apps/app
 
   flutter-test:
     name: Flutter tests
@@ -68,8 +70,10 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-      - run: flutter pub get --directory apps/app
-      - run: flutter test --directory apps/app
+      - run: flutter pub get
+        working-directory: apps/app
+      - run: flutter test
+        working-directory: apps/app
 
   rust-tests:
     name: Rust tests

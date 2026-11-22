@@ -172,7 +172,9 @@ mod tests {
 
         assert_eq!(metrics.paste_volume, 1200);
         assert!(metrics.score() < 60);
-        assert!(metrics.integrity_flags().contains(&IntegrityFlag::LargePaste));
+        assert!(metrics
+            .integrity_flags()
+            .contains(&IntegrityFlag::LargePaste));
     }
 
     #[test]
@@ -185,7 +187,9 @@ mod tests {
         let metrics = EffortMetrics::from_events(&events);
 
         assert_eq!(metrics.ai_tab_switches, 1);
-        assert!(metrics.integrity_flags().contains(&IntegrityFlag::AiTabSwitch));
+        assert!(metrics
+            .integrity_flags()
+            .contains(&IntegrityFlag::AiTabSwitch));
         assert!(metrics.score() <= 90);
     }
 }

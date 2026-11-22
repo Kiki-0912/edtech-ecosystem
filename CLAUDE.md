@@ -63,8 +63,8 @@ cargo fmt --manifest-path crates/telemetry-core/Cargo.toml -- --check
 Baseline after the Postgres work (2026-11-22): typecheck clean; `npm run test:api`
 25 pass (10 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
 included); `flutter test` ~89 pass, with `api_integration_test.dart` skipping
-unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy clean,
-but `cargo fmt --check` already fails — pre-existing, not your regression.
+unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
+`cargo fmt --check` clean. CI runs Node 22 (`node --test` globs need Node ≥ 21).
 
 ## Workflow rules
 
