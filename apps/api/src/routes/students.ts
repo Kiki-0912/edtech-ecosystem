@@ -1,23 +1,64 @@
-import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import {
+  getUser,
   getUsers,
   createUser,
   updateUser,
+  deleteUser,
+  getCourse,
   getCourses,
-  getStudentDepartments,
+  getDepartment,
   enrollStudentInDepartment,
-  unenrollStudentFromDepartment,
-  getDepartmentsByStudent,
   getStudentsByCourse,
-  addStudentToCourse,
-  removeStudentFromCourse,
+  setCourseStudents,
 } from '../store/db.js';
 import { authenticate } from '../middleware/auth.js';
-import type { User, Role } from "../store/db";
+import { TEXT, bodySchema, rejectInvalidBody } from '../middleware/validation.js';
 import type { StudentSummary } from '@edtech/shared';
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
+
+const CREATE_STUDENT_SCHEMA = {
+  type: 'object',
+  required: ['displayName'],
+  properties: {
+    displayName: TEXT,
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    rollNumber: { type: 'string' },
+    courseId: TEXT,
+    departmentId: TEXT,
+  },
+};
+
+const UPDATE_STUDENT_SCHEMA = {
+  type: 'object',
+  properties: {
+    displayName: TEXT,
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    courseId: TEXT,
+  },
+};
+
+const invalid = (reply: FastifyReply, code: string, message: string) =>
+  reply.code(400).send({ error: { code, message } });
+
+/**
+ * Make `courseId` the student's only course. setCourseStudents keeps
+ * courses.studentIds, users.courseIds and course channel membership in sync.
+ */
+async function enrollInOnly(studentId: string, courseId: string): Promise<void> {
+  for (const course of await getCourses()) {
+    if (course.id !== courseId && course.studentIds.includes(studentId)) {
+      await setCourseStudents(course.id, course.studentIds.filter((id) => id !== studentId));
+    }
+  }
+  const target = await getCourse(courseId);
+  // Also run when already on the roster, so users.courseIds catches up.
+  if (target) await setCourseStudents(courseId, [...target.studentIds, studentId]);
+}
 
 const studentsRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/v1/students - list all students (admin/teacher). A student gets
@@ -64,59 +105,74 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/students - create a new student (admin only)
   fastify.post(
     '/students',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate], ...bodySchema(CREATE_STUDENT_SCHEMA) },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
+      if (rejectInvalidBody(request, reply)) return reply;
       const body = request.body as {
         displayName: string;
-        email: string;
-        phone: string;
+        email?: string;
+        phone?: string;
         rollNumber?: string;
         courseId?: string;
         departmentId?: string;
       };
+      const email = body.email?.trim() ?? '';
+      const phone = body.phone?.trim() ?? '';
+      if (!email && !phone) {
+        return invalid(reply, 'INVALID_BODY', 'Phone or email is required');
+      }
+      // Check references before writing, so a bad id leaves nothing behind.
+      if (body.courseId && !(await getCourse(body.courseId))) {
+        return invalid(reply, 'INVALID_REFERENCE', 'Course not found');
+      }
+      if (body.departmentId && !(await getDepartment(body.departmentId))) {
+        return invalid(reply, 'INVALID_REFERENCE', 'Department not found');
+      }
       const id = randomUUID();
-      const now = new Date().toISOString();
+      // A duplicate email or phone is rejected by the store (409 CONFLICT).
       await createUser({
         id,
-        displayName: body.displayName,
-        email: body.email,
-        phone: body.phone,
+        displayName: body.displayName.trim(),
+        email,
+        phone,
         role: 'student',
-        courseIds: body.courseId ? [body.courseId] : [],
+        courseIds: [],
         passwordHash: '',
         isPhoneVerified: 0,
-        createdAt: now,
+        createdAt: new Date().toISOString(),
       });
+      if (body.courseId) await enrollInOnly(id, body.courseId);
 
       // If department specified, enroll student
       if (body.departmentId) {
         await enrollStudentInDepartment({
           studentId: id,
           departmentId: body.departmentId,
-          enrolledBy: caller?.id ?? id,
+          enrolledBy: caller.id,
         });
       }
 
-      const user = (await getUsers()).find((u) => u.id === id);
-      return reply.code(201).send({ data: user });
+      return reply.code(201).send({ data: await getUser(id) });
     }
   );
 
-  // PUT /api/v1/students/:id - update a student (admin only)
+  // PUT /api/v1/students/:id - update a student (admin only). A courseId
+  // moves the student into that one course (out of any others).
   fastify.put(
     '/students/:id',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate], ...bodySchema(UPDATE_STUDENT_SCHEMA) },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
+      if (rejectInvalidBody(request, reply)) return reply;
       const body = request.body as Partial<{
         displayName: string;
         email: string;
@@ -124,29 +180,33 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
         courseId: string;
       }>;
       const studentId = (req.params as { id: string }).id;
-      const updates: Record<string, any> = {};
-      if (body.displayName !== undefined) updates.displayName = body.displayName;
-      if (body.email !== undefined) updates.email = body.email;
-      if (body.phone !== undefined) updates.phone = body.phone;
-      await updateUser(studentId, updates);
-
-      // Update course if provided
-      if (body.courseId !== undefined) {
-        // Remove from all courses first, then add to new one
-        const courses = await getCourses();
-        for (const course of courses) {
-          if (course.studentIds.includes(studentId)) {
-            await removeStudentFromCourse(course.id, studentId);
-          }
-        }
-        await addStudentToCourse(body.courseId, studentId);
+      const student = await getUser(studentId);
+      if (!student || student.role !== 'student') {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Student not found' } });
       }
+      if (body.courseId !== undefined && !(await getCourse(body.courseId))) {
+        return invalid(reply, 'INVALID_REFERENCE', 'Course not found');
+      }
+      const email = body.email === undefined ? student.email : body.email.trim();
+      const phone = body.phone === undefined ? student.phone : body.phone.trim();
+      if (!email && !phone) {
+        return invalid(reply, 'INVALID_BODY', 'Phone or email is required');
+      }
+      // A duplicate email or phone is rejected by the store (409 CONFLICT).
+      await updateUser(studentId, {
+        displayName: body.displayName?.trim(),
+        email: body.email === undefined ? undefined : email,
+        phone: body.phone === undefined ? undefined : phone,
+      });
+      if (body.courseId !== undefined) await enrollInOnly(studentId, body.courseId);
 
-      return reply.send({ data: (await getUsers()).find((u) => u.id === studentId) });
+      return reply.send({ data: await getUser(studentId) });
     }
   );
 
-  // DELETE /api/v1/students/:id - delete a student (admin only)
+  // DELETE /api/v1/students/:id - delete a student (admin only). Same store
+  // delete as the admin console, so roster, channel, submission, attendance,
+  // telemetry and department rows go with the account.
   fastify.delete(
     '/students/:id',
     { preHandler: [authenticate] },
@@ -157,17 +217,18 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
       const studentId = (req.params as { id: string }).id;
-      // Remove from all courses
-      const courses = await getCourses();
-      for (const course of courses) {
-        if (course.studentIds.includes(studentId)) {
-          await removeStudentFromCourse(course.id, studentId);
-        }
+      const student = await getUser(studentId);
+      if (!student || student.role !== 'student') {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Student not found' } });
       }
-      // Remove department enrollments
-      const deptEnrollments = await getStudentDepartments(studentId);
-      for (const d of deptEnrollments) {
-        await unenrollStudentFromDepartment(studentId, d.departmentId);
+      const result = await deleteUser(studentId);
+      if (result === 'not_found') {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Student not found' } });
+      }
+      if (result !== 'deleted') {
+        return reply
+          .code(409)
+          .send({ error: { code: 'USER_IN_USE', message: 'This student cannot be deleted' } });
       }
       return reply.send({ data: { success: true } });
     }

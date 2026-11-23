@@ -1,11 +1,37 @@
-const AI_HOSTS = [
-  "chatgpt.com",
-  "chat.openai.com",
-  "claude.ai",
-  "gemini.google.com",
-  "copilot.microsoft.com",
-  "perplexity.ai",
-];
+// Integrity Lens service worker (MV3, ES module). Pure logic lives in lib.js so
+// apps/api/test/telemetry-extension.test.ts can exercise it in Node.
+//
+// Rules this file keeps:
+//  - Nothing is recorded or uploaded before consent.
+//  - Every chrome.storage read-modify-write runs inside withLock, so concurrent
+//    messages, alarms and uploads cannot lose or duplicate events.
+//  - Timers are chrome.alarms: in-memory timers die with the suspended worker.
+import {
+  MAX_SIGNATURE_FAILURES,
+  addToBucket,
+  aiTabSwitchEvent,
+  applyEvents,
+  buildBatch,
+  classifyUploadResponse,
+  computeScore,
+  createLock,
+  effectiveOrigins,
+  emptySession,
+  generateSigningJwk,
+  hostFromUrl,
+  isAiHost,
+  isMonitoredUrl,
+  latestActiveSession,
+  needsNewSigningKey,
+  nextUploadable,
+  normalizeBaseUrl,
+  originMatchPattern,
+  queueStats,
+  retryDelayMs,
+  sanitizeContentEvents,
+  signBatch,
+  DEFAULT_API_BASE_URL,
+} from "./lib.js";
 
 const SESSIONS_KEY = "sessions";
 const PENDING_EVENTS_KEY = "pendingEvents";
@@ -18,51 +44,24 @@ const INSTALL_KEY = "installKey";
 const SETTINGS_KEY = "settings";
 
 const RECENT_WINDOW_MS = 30 * 60 * 1000;
-const FLUSH_INTERVAL_MS = 15_000;
-const RETRY_BASE_MS = 10_000;
-const RETRY_MAX_MS = 5 * 60 * 1000;
 const MAX_PENDING_BATCHES = 200;
 const MAX_QUEUE_EVENTS = 5_000;
 
-const emptySession = (tabId, url) => ({
-  tabId,
-  url,
-  sessionId: crypto.randomUUID(),
-  assignmentId: null,
-  keystrokes: 0,
-  pastes: 0,
-  pasteVolume: 0,
-  aiTabSwitches: 0,
-  activeMs: 0,
-  activeSeconds: 0,
-  score: 100,
-  startedAt: Date.now(),
-  lastActiveAt: Date.now(),
-  updatedAt: Date.now(),
-});
+const FLUSH_ALARM = "flush";
+const RETRY_ALARM = "retry";
+// One minute is the smallest period every supported Chrome honours.
+const FLUSH_PERIOD_MINUTES = 1;
 
-function hostFromUrl(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
+const CONTENT_SCRIPT_ID = "integrity-lens-capture";
 
-function isAiHost(host) {
-  return AI_HOSTS.some((aiHost) => host === aiHost || host.endsWith(`.${aiHost}`));
-}
+/** Storage read-modify-write lock (see lib.js createLock). Not re-entrant. */
+const withLock = createLock();
+/** One upload run at a time, so a batch is never in flight twice. */
+const withUploadLock = createLock();
+/** Serialises content-script (un)registration. */
+const withScriptLock = createLock();
 
-function computeScore(session) {
-  const totalInput = session.keystrokes + session.pasteVolume;
-  const pasteRatio = totalInput === 0 ? 0 : session.pasteVolume / totalInput;
-  const pastePenalty = Math.round(Math.min(45, pasteRatio * 100));
-  const aiPenalty = Math.min(30, session.aiTabSwitches * 10);
-  const idlePenalty = session.activeSeconds < 60 && session.pastes > 0 ? 10 : 0;
-  return Math.max(0, Math.min(100, 100 - pastePenalty - aiPenalty - idlePenalty));
-}
-
-/* ---------- storage helpers ---------- */
+/* ---------- storage helpers (raw; mutate only inside withLock) ---------- */
 
 async function loadSessions() {
   const stored = await chrome.storage.session.get(SESSIONS_KEY);
@@ -77,8 +76,9 @@ async function getSettings() {
   const stored = await chrome.storage.sync.get(SETTINGS_KEY);
   const settings = stored[SETTINGS_KEY] ?? {};
   return {
-    apiBaseUrl: normalizeBaseUrl(settings.apiBaseUrl ?? "http://localhost:4000"),
+    apiBaseUrl: normalizeBaseUrl(settings.apiBaseUrl ?? DEFAULT_API_BASE_URL),
     consentEnabled: Boolean(settings.consentEnabled),
+    allowedOrigins: settings.allowedOrigins,
   };
 }
 
@@ -90,10 +90,6 @@ async function getAuth() {
     studentId: typeof auth.studentId === "string" ? auth.studentId : null,
     studentName: typeof auth.studentName === "string" ? auth.studentName : null,
   };
-}
-
-function normalizeBaseUrl(url) {
-  return String(url ?? "").trim().replace(/\/+$/, "");
 }
 
 async function loadPendingEvents() {
@@ -114,88 +110,40 @@ async function saveQueue(queue) {
   await chrome.storage.local.set({ [QUEUE_KEY]: queue });
 }
 
-async function updateStatus(patch) {
+async function patchStatus(patch) {
   const stored = await chrome.storage.session.get(STATUS_KEY);
   const status = { ...(stored[STATUS_KEY] ?? {}), ...patch, updatedAt: Date.now() };
   await chrome.storage.session.set({ [STATUS_KEY]: status });
   return status;
 }
 
+function updateStatus(patch) {
+  return withLock(() => patchStatus(patch));
+}
+
 /* ---------- HMAC signing key (one per install) ---------- */
 
-async function getSigningKey() {
-  const stored = await chrome.storage.local.get(INSTALL_KEY);
-  if (stored[INSTALL_KEY]?.privateKey) {
-    return crypto.subtle.importKey(
-      "jwk",
-      stored[INSTALL_KEY].privateKey,
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
-  }
-
-  const key = await crypto.subtle.generateKey(
-    { name: "HMAC", hash: "SHA-256" },
-    true,
-    ["sign", "verify"],
-  );
-  const privateKey = await crypto.subtle.exportKey("jwk", key);
-  const publicKey = await crypto.subtle.exportKey("jwk", key);
-  await chrome.storage.local.set({
-    [INSTALL_KEY]: {
-      // The HMAC key doubles as the client identity until the server
-      // verifies real asymmetric signatures (planned hardening step).
-      privateKey,
-      publicKey: { kty: publicKey.kty, alg: "HS256" },
-    },
+/** The install's HMAC JWK, regenerated when the stored one cannot sign a
+ *  verifiable batch (older versions stored the public JWK without `k`). */
+function getSigningJwk({ rotate = false } = {}) {
+  return withLock(async () => {
+    const stored = (await chrome.storage.local.get(INSTALL_KEY))[INSTALL_KEY];
+    if (!rotate && !needsNewSigningKey(stored)) {
+      return stored.publicKey;
+    }
+    const jwk = await generateSigningJwk();
+    // HMAC is symmetric: the server needs the full key (with `k`) to verify.
+    // Identity still comes from the bearer token, not from this key.
+    await chrome.storage.local.set({ [INSTALL_KEY]: { privateKey: jwk, publicKey: jwk } });
+    return jwk;
   });
-  return key;
-}
-
-async function signBatch(key, canonical) {
-  const data = new TextEncoder().encode(canonical);
-  const signature = await crypto.subtle.sign("HMAC", key, data);
-  return b64url(new Uint8Array(signature));
-}
-
-function b64url(bytes) {
-  let binary = "";
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /* ---------- telemetry ingestion from content scripts ---------- */
 
-function applyEvents(session, events) {
-  for (const event of events) {
-    if (event.type === "keystroke") {
-      session.keystrokes += 1;
-      const delta = Number(event.payload?.deltaMs ?? 0);
-      session.activeMs += Number.isFinite(delta) ? Math.min(Math.max(delta, 0), 5000) : 0;
-    } else if (event.type === "paste") {
-      session.pastes += 1;
-      const characters = Number(event.payload?.characterCount ?? 0);
-      session.pasteVolume += Number.isFinite(characters) ? Math.max(0, characters) : 0;
-    } else if (event.type === "cursor") {
-      const distance = Number(event.payload?.distancePx ?? 0);
-      session.cursorDistancePx =
-        (session.cursorDistancePx ?? 0) +
-        (Number.isFinite(distance) ? Math.max(0, Math.round(distance)) : 0);
-    }
-  }
-
-  session.activeSeconds = Math.round(session.activeMs / 1000);
-  session.score = computeScore(session);
-  session.lastActiveAt = Date.now();
-  session.updatedAt = Date.now();
-}
-
 async function handleTelemetry(message, sender) {
   const tabId = sender.tab?.id;
-  if (tabId === undefined) {
+  if (tabId === undefined || sender.id !== chrome.runtime.id) {
     return { ok: false, reason: "no-tab" };
   }
 
@@ -204,32 +152,99 @@ async function handleTelemetry(message, sender) {
     return { ok: false, disabled: true };
   }
 
-  const sessions = await loadSessions();
-  const session = sessions[tabId] ?? emptySession(tabId, sender.tab.url ?? "");
-  session.url = sender.tab.url ?? session.url;
-  session.sessionId = message.sessionId ?? session.sessionId;
-  if (message.assignmentId && message.assignmentId !== "unassigned") {
-    session.assignmentId = message.assignmentId;
-  }
+  const auth = await getAuth();
+  const origins = effectiveOrigins(settings);
+  const events = sanitizeContentEvents(message.events);
+  const tabUrl = sender.tab.url ?? "";
 
-  applyEvents(session, Array.isArray(message.events) ? message.events : []);
-  sessions[tabId] = session;
-  await saveSessions(sessions);
+  return withLock(async () => {
+    const sessions = await loadSessions();
+    const session = sessions[tabId] ?? emptySession(tabId, tabUrl);
+    session.url = tabUrl || session.url;
+    if (typeof message.sessionId === "string" && message.sessionId) {
+      session.sessionId = message.sessionId;
+    }
 
-  // Buffer raw events for batch upload to the API.
-  const pending = await loadPendingEvents();
-  const bucket = pending[tabId] ?? { sessionId: session.sessionId, events: [] };
-  bucket.events.push(...(Array.isArray(message.events) ? message.events : []));
-  if (bucket.events.length > MAX_QUEUE_EVENTS) {
-    bucket.events = bucket.events.slice(-MAX_QUEUE_EVENTS);
-  }
-  pending[tabId] = bucket;
-  await savePendingEvents(pending);
+    // Only a configured LMS origin may attach a session to an assignment;
+    // anything else stays local and is never uploaded.
+    if (!isMonitoredUrl(session.url, origins)) {
+      session.assignmentId = null;
+    } else if (
+      typeof message.assignmentId === "string" &&
+      message.assignmentId &&
+      message.assignmentId !== "unassigned"
+    ) {
+      session.assignmentId = message.assignmentId;
+    }
 
-  return { ok: true, score: session.score };
+    applyEvents(session, events);
+    sessions[tabId] = session;
+    await saveSessions(sessions);
+
+    // Buffer raw events for batch upload, tagged with the signed-in account.
+    const pending = await loadPendingEvents();
+    addToBucket(pending, tabId, {
+      sessionId: session.sessionId,
+      ownerId: auth.studentId,
+      events,
+      maxEvents: MAX_QUEUE_EVENTS,
+    });
+    await savePendingEvents(pending);
+
+    return { ok: true, score: session.score };
+  });
 }
 
 /* ---------- batch construction and upload ---------- */
+
+/** Turn pending buckets owned by the signed-in student into queued batches. */
+async function enqueueBatches(settings, auth) {
+  const origins = effectiveOrigins(settings);
+  const pending = await loadPendingEvents();
+  const sessions = await loadSessions();
+  const queue = await loadQueue();
+
+  for (const [tabId, bucket] of Object.entries(pending)) {
+    if (!bucket?.events?.length) {
+      delete pending[tabId];
+      continue;
+    }
+    // Captured under another account (or signed out): never upload it as
+    // this student. It stays partitioned until its owner signs in again.
+    if (bucket.ownerId !== auth.studentId) {
+      continue;
+    }
+
+    const session = sessions[tabId];
+    const assignmentId = session?.assignmentId ?? null;
+    if (!assignmentId || !isMonitoredUrl(session.url, origins)) {
+      // Sessions not attached to an assignment stay local only.
+      continue;
+    }
+
+    const batch = buildBatch({
+      studentId: auth.studentId,
+      assignmentId,
+      sessionId: bucket.sessionId,
+      events: bucket.events,
+    });
+    queue.push({ batch, attempts: 0, nextAttemptAt: 0, signatureFailures: 0 });
+    delete pending[tabId];
+  }
+
+  if (queue.length > MAX_PENDING_BATCHES) {
+    queue.splice(0, queue.length - MAX_PENDING_BATCHES);
+  }
+
+  await savePendingEvents(pending);
+  await saveQueue(queue);
+  await patchStatus({
+    consentEnabled: true,
+    ...queueStats(queue, auth.studentId),
+    loggedIn: true,
+    studentName: auth.studentName,
+  });
+}
 
 async function flushToApi() {
   const settings = await getSettings();
@@ -242,161 +257,181 @@ async function flushToApi() {
     return;
   }
 
-  const pending = await loadPendingEvents();
-  const sessions = await loadSessions();
+  await withLock(() => enqueueBatches(settings, auth));
+  await withUploadLock(() => uploadReadyBatches(settings, auth));
+}
+
+/** Record an upload outcome on the queued batch. Returns true to stop the run. */
+async function applyOutcome(batchId, outcome, status, auth) {
   const queue = await loadQueue();
+  const index = queue.findIndex((entry) => entry.batch.batchId === batchId);
+  const item = index === -1 ? null : queue[index];
+  let stop = false;
+  const patch = {};
 
-  for (const [tabId, bucket] of Object.entries(pending)) {
-    if (!bucket?.events?.length) {
-      delete pending[tabId];
-      continue;
+  if (outcome === "ok") {
+    if (item) {
+      queue.splice(index, 1);
     }
-
-    const session = sessions[tabId];
-    const assignmentId = session?.assignmentId ?? null;
-    if (!assignmentId) {
-      // Sessions not attached to an assignment stay local only.
-      continue;
+    Object.assign(patch, { lastUploadAt: Date.now(), lastError: null, needsReauth: false });
+  } else if (outcome === "reauth") {
+    Object.assign(patch, { needsReauth: true, lastError: "Session expired, sign in again" });
+    stop = true;
+  } else if (outcome === "resign") {
+    if (item) {
+      item.signatureFailures = (item.signatureFailures ?? 0) + 1;
+      if (item.signatureFailures > MAX_SIGNATURE_FAILURES) {
+        queue.splice(index, 1);
+        patch.lastError = "Batch dropped: signature rejected";
+      }
     }
-
-    const batch = {
-      batchId: crypto.randomUUID(),
-      studentId: auth.studentId,
-      assignmentId,
-      createdAt: new Date().toISOString(),
-      events: bucket.events.map((event) => ({
-        id: crypto.randomUUID(),
-        sessionId: bucket.sessionId,
-        assignmentId,
-        studentId: auth.studentId,
-        type: event.type,
-        occurredAt: event.occurredAt ?? new Date().toISOString(),
-        payload: event.payload ?? {},
-      })),
-    };
-
-    queue.push({ batch, attempts: 0, nextAttemptAt: 0 });
-    delete pending[tabId];
+  } else if (outcome === "drop") {
+    if (item) {
+      queue.splice(index, 1);
+    }
+    patch.lastError = `Batch rejected (${status})`;
+  } else {
+    if (item) {
+      item.attempts += 1;
+      item.nextAttemptAt = Date.now() + retryDelayMs(item.attempts);
+    }
+    patch.lastError = status === 0 ? "API unreachable, will retry" : `Server error (${status})`;
+    stop = true;
   }
 
-  if (queue.length > MAX_PENDING_BATCHES) {
-    queue.splice(0, queue.length - MAX_PENDING_BATCHES);
-  }
-
-  const totalEvents = queue.reduce((sum, item) => sum + item.batch.events.length, 0);
-  await savePendingEvents(pending);
   await saveQueue(queue);
-  await updateStatus({
-    consentEnabled: true,
-    pendingBatches: queue.length,
-    pendingEvents: totalEvents,
-    loggedIn: Boolean(auth.studentId),
-    studentName: auth.studentName,
-  });
-
-  await uploadReadyBatches(settings, auth);
+  await patchStatus({ ...patch, ...queueStats(queue, auth.studentId) });
+  return stop;
 }
 
 async function uploadReadyBatches(settings, auth) {
-  const queue = await loadQueue();
-  if (queue.length === 0) {
-    return;
-  }
+  let jwk = null;
+  let rotate = false;
 
-  let signingKey = null;
-  let hadTransportError = false;
-
-  while (queue.length > 0) {
-    const item = queue[0];
-    if (item.nextAttemptAt > Date.now()) {
+  for (;;) {
+    const item = await withLock(async () =>
+      nextUploadable(await loadQueue(), auth.studentId, Date.now()),
+    );
+    if (!item) {
       break;
     }
 
-    if (!signingKey) {
-      signingKey = await getSigningKey();
+    if (!jwk) {
+      jwk = await getSigningJwk({ rotate });
+      rotate = false;
     }
+    const body = await signBatch(item.batch, jwk);
 
-    const storedKey = (await chrome.storage.local.get(INSTALL_KEY))[INSTALL_KEY];
-    const canonical = JSON.stringify({
-      batchId: item.batch.batchId,
-      studentId: item.batch.studentId,
-      assignmentId: item.batch.assignmentId,
-      createdAt: item.batch.createdAt,
-      events: item.batch.events,
-    });
-    const clientSignature = await signBatch(signingKey, canonical);
-
-    let response;
+    let status = 0;
+    let code = null;
     try {
-      response = await fetch(`${settings.apiBaseUrl}/api/v1/telemetry/batches`, {
+      const response = await fetch(`${settings.apiBaseUrl}/api/v1/telemetry/batches`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${auth.token}`,
         },
-        body: JSON.stringify({
-          ...item.batch,
-          clientSignature,
-          clientPublicKey: JSON.stringify(storedKey?.publicKey ?? {}),
-        }),
+        body: JSON.stringify(body),
       });
+      status = response.status;
+      if (!response.ok) {
+        code = (await response.json().catch(() => null))?.error?.code ?? null;
+      }
     } catch {
-      // Network failure: back off and retry later, keep the batch queued.
-      hadTransportError = true;
-      item.attempts += 1;
-      item.nextAttemptAt =
-        Date.now() + Math.min(RETRY_BASE_MS * 2 ** item.attempts, RETRY_MAX_MS);
+      status = 0;
+    }
+
+    const outcome = classifyUploadResponse(status, code);
+    if (outcome === "resign") {
+      // The server could not verify our key: mint a fresh one and retry
+      // (bounded per batch by MAX_SIGNATURE_FAILURES).
+      jwk = null;
+      rotate = true;
+    }
+    const stop = await withLock(() => applyOutcome(item.batch.batchId, outcome, status, auth));
+    if (stop) {
       break;
     }
-
-    if (response.ok) {
-      queue.shift();
-      await saveQueue(queue);
-      await updateStatus({
-        lastUploadAt: Date.now(),
-        lastError: null,
-        needsReauth: false,
-        pendingBatches: queue.length,
-      });
-      continue;
-    }
-
-    if (response.status === 401 || response.status === 403) {
-      // Token expired or rejected: keep the batch, ask the user to sign in again.
-      await updateStatus({ needsReauth: true, lastError: "Session expired" });
-      break;
-    }
-
-    if (response.status >= 400 && response.status < 500) {
-      // Permanently rejected batch (e.g. unknown assignment): drop it.
-      queue.shift();
-      await saveQueue(queue);
-      await updateStatus({
-        lastError: `Batch rejected (${response.status})`,
-        pendingBatches: queue.length,
-      });
-      continue;
-    }
-
-    // Server error: retry with backoff.
-    item.attempts += 1;
-    item.nextAttemptAt =
-      Date.now() + Math.min(RETRY_BASE_MS * 2 ** item.attempts, RETRY_MAX_MS);
-    hadTransportError = true;
-    break;
   }
 
-  if (hadTransportError) {
-    await saveQueue(queue);
+  await scheduleRetry(auth);
+}
+
+/** A one-shot alarm at the earliest backoff deadline (the periodic flush
+ *  alarm is the safety net if Chrome clamps it). */
+async function scheduleRetry(auth) {
+  const queue = await loadQueue();
+  const now = Date.now();
+  const due = queue
+    .filter((entry) => entry.batch.studentId === auth.studentId && entry.nextAttemptAt > now)
+    .map((entry) => entry.nextAttemptAt);
+  if (due.length === 0) {
+    await chrome.alarms.clear(RETRY_ALARM);
+    return;
   }
-  await updateStatus({ pendingBatches: queue.length });
+  await chrome.alarms.create(RETRY_ALARM, { when: Math.min(...due) });
+}
+
+/* ---------- monitored origins: content-script registration ---------- */
+
+/** Inject the capture scripts only on configured LMS origins the student has
+ *  granted host access to (optional_host_permissions). */
+function syncContentScripts() {
+  return withScriptLock(async () => {
+    const settings = await getSettings();
+    const matches = [];
+    for (const origin of effectiveOrigins(settings)) {
+      const pattern = originMatchPattern(origin);
+      if (await chrome.permissions.contains({ origins: [pattern] })) {
+        matches.push(pattern);
+      }
+    }
+
+    const existing = await chrome.scripting.getRegisteredContentScripts({
+      ids: [CONTENT_SCRIPT_ID],
+    });
+    if (existing.length > 0) {
+      await chrome.scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] });
+    }
+    if (matches.length === 0) {
+      return;
+    }
+    await chrome.scripting.registerContentScripts([
+      {
+        id: CONTENT_SCRIPT_ID,
+        matches,
+        // privacy.js defines the sensitive-target filter content.js relies on.
+        js: ["src/privacy.js", "src/content.js"],
+        runAt: "document_idle",
+        persistAcrossSessions: true,
+      },
+    ]);
+  });
 }
 
 /* ---------- runtime messages ---------- */
 
+async function syncStatus() {
+  const [sessionStored, settings, auth, queue] = await Promise.all([
+    chrome.storage.session.get(STATUS_KEY),
+    getSettings(),
+    getAuth(),
+    loadQueue(),
+  ]);
+  return {
+    ...(sessionStored[STATUS_KEY] ?? {}),
+    consentEnabled: settings.consentEnabled,
+    loggedIn: Boolean(auth.token && auth.studentId),
+    studentName: auth.studentName,
+    ...queueStats(queue, auth.studentId),
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "telemetry") {
-    handleTelemetry(message, sender).then(sendResponse);
+    handleTelemetry(message, sender)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false }));
     return true;
   }
 
@@ -406,45 +441,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "get-session") {
-    (async () => {
-      const sessions = await loadSessions();
-      sendResponse({ session: sessions[message.tabId] ?? null });
-    })();
+    loadSessions().then((sessions) => sendResponse({ session: sessions[message.tabId] ?? null }));
     return true;
   }
 
   if (message?.type === "get-sync-status") {
-    (async () => {
-      const [sessionStored, settings, auth] = await Promise.all([
-        chrome.storage.session.get(STATUS_KEY),
-        getSettings(),
-        getAuth(),
-      ]);
-      const queue = await loadQueue();
-      sendResponse({
-        status: {
-          ...(sessionStored[STATUS_KEY] ?? {}),
-          consentEnabled: settings.consentEnabled,
-          loggedIn: Boolean(auth.token && auth.studentId),
-          studentName: auth.studentName,
-          pendingBatches: queue.length,
-          pendingEvents: queue.reduce((sum, item) => sum + item.batch.events.length, 0),
-        },
-      });
-    })();
+    syncStatus().then((status) => sendResponse({ status }));
+    return true;
+  }
+
+  if (message?.type === "flush-now") {
+    // The options "Upload now" button: run a full flush, then report status.
+    flushToApi()
+      .catch(() => {})
+      .then(syncStatus)
+      .then((status) => sendResponse({ status }));
     return true;
   }
 
   if (message?.type === "reset-session") {
-    (async () => {
+    withLock(async () => {
       const sessions = await loadSessions();
       delete sessions[message.tabId];
       await saveSessions(sessions);
       const pending = await loadPendingEvents();
       delete pending[message.tabId];
       await savePendingEvents(pending);
-      sendResponse({ ok: true });
-    })();
+    }).then(() => sendResponse({ ok: true }));
     return true;
   }
 
@@ -466,67 +489,113 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
       return;
     }
 
-    const sessions = await loadSessions();
-    const now = Date.now();
-    let targetId = null;
-    let latestActivity = 0;
-
-    for (const [id, session] of Object.entries(sessions)) {
-      const isRecent = now - session.lastActiveAt < RECENT_WINDOW_MS;
-      if (isRecent && session.lastActiveAt > latestActivity) {
-        latestActivity = session.lastActiveAt;
-        targetId = id;
+    const auth = await getAuth();
+    await withLock(async () => {
+      const sessions = await loadSessions();
+      const now = Date.now();
+      const found = latestActiveSession(sessions, now, RECENT_WINDOW_MS);
+      if (!found) {
+        return;
       }
-    }
 
-    if (targetId === null) {
-      return;
-    }
+      const [targetId, session] = found;
+      session.aiTabSwitches += 1;
+      session.lastAiHost = host;
+      session.score = computeScore(session);
+      session.updatedAt = now;
+      sessions[targetId] = session;
+      await saveSessions(sessions);
 
-    const session = sessions[targetId];
-    session.aiTabSwitches += 1;
-    session.lastAiHost = host;
-    session.score = computeScore(session);
-    session.updatedAt = now;
-    sessions[targetId] = session;
-    await saveSessions(sessions);
+      // Queue it for upload too, so server scoring and flags see the switch.
+      const pending = await loadPendingEvents();
+      addToBucket(pending, targetId, {
+        sessionId: session.sessionId,
+        ownerId: auth.studentId,
+        events: [aiTabSwitchEvent(host)],
+        maxEvents: MAX_QUEUE_EVENTS,
+      });
+      await savePendingEvents(pending);
+    });
   } catch {
     return;
   }
 });
 
-chrome.tabs.onRemoved.addListener(async (tabId) => {
-  const sessions = await loadSessions();
-  if (sessions[tabId]) {
-    delete sessions[tabId];
-    await saveSessions(sessions);
-  }
-  const pending = await loadPendingEvents();
-  if (pending[tabId]) {
-    delete pending[tabId];
-    await savePendingEvents(pending);
-  }
+chrome.tabs.onRemoved.addListener((tabId) => {
+  // Flush whatever the closing tab buffered before forgetting it.
+  flushToApi()
+    .catch(() => {})
+    .then(() =>
+      withLock(async () => {
+        const sessions = await loadSessions();
+        if (sessions[tabId]) {
+          delete sessions[tabId];
+          await saveSessions(sessions);
+        }
+        const pending = await loadPendingEvents();
+        if (pending[tabId]) {
+          delete pending[tabId];
+          await savePendingEvents(pending);
+        }
+      }),
+    )
+    .catch(() => {});
 });
 
 /* ---------- lifecycle ---------- */
 
-chrome.runtime.onInstalled.addListener(() => {
-  // First-run and updates open settings so the student can review consent.
-  chrome.runtime.openOptionsPage();
-});
+async function ensureFlushAlarm() {
+  const existing = await chrome.alarms.get(FLUSH_ALARM);
+  if (!existing) {
+    await chrome.alarms.create(FLUSH_ALARM, { periodInMinutes: FLUSH_PERIOD_MINUTES });
+  }
+}
 
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "sync" && changes[SETTINGS_KEY]) {
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === FLUSH_ALARM || alarm.name === RETRY_ALARM) {
     flushToApi().catch(() => {});
   }
 });
 
-// Periodic flush: batches queued events and retries failed uploads.
-setInterval(() => {
-  flushToApi().catch(() => {});
-}, FLUSH_INTERVAL_MS);
-
-// Best-effort flush when the worker shuts down.
-chrome.runtime.onSuspend.addListener(() => {
-  flushToApi().catch(() => {});
+chrome.runtime.onInstalled.addListener(() => {
+  // First-run and updates open settings so the student can review consent.
+  chrome.runtime.openOptionsPage();
+  syncContentScripts().catch(() => {});
 });
+
+chrome.runtime.onStartup.addListener(() => {
+  syncContentScripts().catch(() => {});
+});
+
+chrome.permissions.onAdded.addListener(() => {
+  syncContentScripts().catch(() => {});
+});
+
+chrome.permissions.onRemoved.addListener(() => {
+  syncContentScripts().catch(() => {});
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "sync" && changes[SETTINGS_KEY]) {
+    syncContentScripts().catch(() => {});
+    flushToApi().catch(() => {});
+  }
+
+  if (area === "local" && changes[AUTH_KEY]) {
+    const next = changes[AUTH_KEY].newValue;
+    if (next?.token && next?.studentId) {
+      // A fresh sign-in ends any "session expired" state, then uploads the
+      // new account's own queued batches (others stay partitioned).
+      updateStatus({ needsReauth: false, lastError: null, loggedIn: true })
+        .then(flushToApi)
+        .catch(() => {});
+    } else {
+      updateStatus({ needsReauth: false, loggedIn: false, studentName: null }).catch(() => {});
+    }
+  }
+});
+
+// Every worker start (install, browser start, wake-up) makes sure the periodic
+// flush alarm exists. Alarms, unlike setInterval, survive worker suspension, so
+// nothing relies on onSuspend (an async fetch there would never complete).
+ensureFlushAlarm().catch(() => {});

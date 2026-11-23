@@ -1,4 +1,4 @@
-import 'package:material_ui/material_ui.dart';
+import 'package:edtech_app/formats.dart';
 
 class EffortScore {
   const EffortScore({
@@ -36,8 +36,7 @@ class EffortScore {
       pasteVolume: json['pasteVolume'] as int,
       aiTabSwitches: json['aiTabSwitches'] as int,
       activeSeconds: json['activeSeconds'] as int,
-      computedAt: DateTime.tryParse(json['computedAt'] as String? ?? '') ??
-          DateTime.now(),
+      computedAt: parseServerTime(json['computedAt']) ?? DateTime.now(),
     );
   }
 
@@ -52,18 +51,8 @@ class EffortScore {
       'pasteVolume': pasteVolume,
       'aiTabSwitches': aiTabSwitches,
       'activeSeconds': activeSeconds,
-      'computedAt': computedAt.toIso8601String(),
+      'computedAt': computedAt.toUtc().toIso8601String(),
     };
-  }
-
-  Color get scoreColor {
-    if (score >= 75) {
-      return const Color(0xFF34D399);
-    }
-    if (score >= 50) {
-      return const Color(0xFFBBBF24);
-    }
-    return const Color(0xFFF87171);
   }
 
   /// Short qualitative read on [score], rendered under the ring gauge.

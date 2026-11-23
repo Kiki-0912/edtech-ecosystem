@@ -2,9 +2,10 @@
 /// `fromJson` / `toJson` matching the API contract.
 library;
 
+import 'package:edtech_app/formats.dart';
+
 DateTime _date(Object? value) =>
-    DateTime.tryParse(value as String? ?? '') ??
-    DateTime.fromMillisecondsSinceEpoch(0);
+    parseServerTime(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
 
 List<String> _strings(Object? value) =>
     (value as List<dynamic>? ?? const []).map((e) => e.toString()).toList();
@@ -60,7 +61,7 @@ class AdminUser {
         'isActive': isActive,
         'isPhoneVerified': isPhoneVerified,
         'courseIds': courseIds,
-        'createdAt': createdAt.toIso8601String(),
+        'createdAt': createdAt.toUtc().toIso8601String(),
       };
 }
 
@@ -117,7 +118,7 @@ class AdminCourse {
         'studentIds': studentIds,
         'studentCount': studentCount,
         'assignmentCount': assignmentCount,
-        'createdAt': createdAt.toIso8601String(),
+        'createdAt': createdAt.toUtc().toIso8601String(),
       };
 }
 
@@ -173,7 +174,7 @@ class IntegrityRow {
         'courseTitle': courseTitle,
         'score': score,
         'flags': flags,
-        'computedAt': computedAt.toIso8601String(),
+        'computedAt': computedAt.toUtc().toIso8601String(),
       };
 }
 
@@ -276,6 +277,6 @@ class AdminOverview {
         'database': database,
         'schemaVersion': schemaVersion,
         'version': version,
-        'serverTime': serverTime.toIso8601String(),
+        'serverTime': serverTime.toUtc().toIso8601String(),
       };
 }

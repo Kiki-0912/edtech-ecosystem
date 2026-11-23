@@ -274,11 +274,16 @@ class _DayStrip extends StatelessWidget {
                     color: color,
                     borderRadius: AppRadius.smAll,
                   ),
-                  child: Text(
-                    '${d.day}',
-                    style: context.text.labelSmall?.copyWith(
-                      color: status == null ? c.textMuted : c.surface,
-                      fontSize: size * 0.38,
+                  padding: const EdgeInsets.all(AppSpacing.xxs),
+                  // Scales the token style down to the cell instead of a
+                  // computed font size.
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${d.day}',
+                      style: context.text.labelSmall?.copyWith(
+                        color: status == null ? c.textMuted : c.surface,
+                      ),
                     ),
                   ),
                 ),

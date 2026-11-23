@@ -1,38 +1,33 @@
-FROM node:20-slim
+# API image: builds apps/api with tsup and runs apps/api/dist/index.js.
+# Storage is Postgres via DATABASE_URL (see docker-compose.yml).
 
-# Build tools needed for better-sqlite3 native module
-RUN apt-get update && apt-get install -y \
-    python3 \
-    make \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
-
+FROM node:22-slim AS build
 WORKDIR /app
 
-# Install dependencies first (layer caching)
-COPY package.json ./
-COPY package-lock.json* ./
+# Workspace manifests first so `npm ci` is cached until dependencies change.
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+RUN npm ci --workspace @edtech/api --include-workspace-root
 
-RUN npm install
-
-# Copy workspace sources
 COPY apps/api ./apps/api
 COPY packages/shared ./packages/shared
-
-# Build the API bundle
 RUN npm run build:api
 
-# SQLite data directory
-RUN mkdir -p /app/data
-
-EXPOSE 4000
-
+FROM node:22-slim AS runtime
+WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=4000
 ENV HOST=0.0.0.0
-ENV CORS_ORIGIN=*
 
-# Persist SQLite data across restarts
-VOLUME ["/app/data"]
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/shared/package.json ./packages/shared/
+RUN npm ci --omit=dev --workspace @edtech/api --include-workspace-root \
+  && npm cache clean --force
 
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+
+EXPOSE 4000
+USER node
 CMD ["node", "apps/api/dist/index.js"]

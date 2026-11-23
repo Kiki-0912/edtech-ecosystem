@@ -134,12 +134,15 @@ export const updateSubmission: Store["updateSubmission"] = (...args) => active()
 export const getCalendarEvents: Store["getCalendarEvents"] = (...args) => active().getCalendarEvents(...args);
 export const createCalendarEvent: Store["createCalendarEvent"] = (...args) => active().createCalendarEvent(...args);
 export const updateCalendarEvent: Store["updateCalendarEvent"] = (...args) => active().updateCalendarEvent(...args);
+export const getCalendarEvent: Store["getCalendarEvent"] = (...args) => active().getCalendarEvent(...args);
 export const deleteCalendarEvent: Store["deleteCalendarEvent"] = (...args) => active().deleteCalendarEvent(...args);
 export const getChannelsByCourse: Store["getChannelsByCourse"] = (...args) => active().getChannelsByCourse(...args);
 export const getChannel: Store["getChannel"] = (...args) => active().getChannel(...args);
 export const getMessages: Store["getMessages"] = (...args) => active().getMessages(...args);
 export const createMessage: Store["createMessage"] = (...args) => active().createMessage(...args);
 export const getTelemetryBatches: Store["getTelemetryBatches"] = (...args) => active().getTelemetryBatches(...args);
+export const getTelemetryBatch: Store["getTelemetryBatch"] = (...args) => active().getTelemetryBatch(...args);
+export const getTelemetryBatchesFor: Store["getTelemetryBatchesFor"] = (...args) => active().getTelemetryBatchesFor(...args);
 export const hasTelemetryBatch: Store["hasTelemetryBatch"] = (...args) => active().hasTelemetryBatch(...args);
 export const createTelemetryBatch: Store["createTelemetryBatch"] = (...args) => active().createTelemetryBatch(...args);
 export const getEffortScore: Store["getEffortScore"] = (...args) => active().getEffortScore(...args);

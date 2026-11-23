@@ -52,9 +52,25 @@ String durationLabel(int totalSeconds) {
   return rest == 0 ? '$hours h' : '$hours h $rest min';
 }
 
-/// True when both instants fall on the same calendar day.
-bool isSameDay(DateTime a, DateTime b) =>
-    a.year == b.year && a.month == b.month && a.day == b.day;
+/// True when both instants fall on the same calendar day in local time.
+///
+/// Both sides are converted with `toLocal()` so a UTC instant from the API
+/// (`...Z`) is compared by the day the user actually sees.
+bool isSameDay(DateTime a, DateTime b) {
+  final x = a.toLocal();
+  final y = b.toLocal();
+  return x.year == y.year && x.month == y.month && x.day == y.day;
+}
+
+/// Parses an API timestamp into local time, or `null` when absent/invalid.
+///
+/// The API sends UTC ISO strings (`2026-09-01T09:00:00.000Z`), which
+/// `DateTime.parse` keeps in UTC; every screen formats wall-clock fields
+/// (`hour`, `day`), so models convert to local here once.
+DateTime? parseServerTime(Object? value) {
+  if (value is! String || value.isEmpty) return null;
+  return DateTime.tryParse(value)?.toLocal();
+}
 
 /// `4,210` — thousands separated for the metric rows.
 String grouped(int value) => value.toString().replaceAllMapped(

@@ -354,8 +354,7 @@ void useFakeApi(FakeAdminApi api) {
       ..httpClientOverride = null
       ..offlineMode = null
       ..token = null
-      ..onUnauthorized = null
-      ..demoFallback = true;
+      ..onUnauthorized = null;
   });
 }
 

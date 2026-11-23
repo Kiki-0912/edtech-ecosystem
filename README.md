@@ -260,6 +260,9 @@ npm run dev:api
 ```
 
 `docker compose up` starts both Postgres and the API, already wired together.
+It requires `AUTH_SECRET` (for example `export AUTH_SECRET=$(openssl rand -hex 32)`):
+the container runs with `NODE_ENV=production`, so without it the API exits with
+"Refusing to start". `npm run db:up` starts only Postgres and needs no `AUTH_SECRET`.
 
 Without `DATABASE_URL` the API falls back to the in-memory store seeded from
 `apps/api/src/store/memory.ts`. Restarting the process then resets all writes.
@@ -267,8 +270,7 @@ Tests use the in-memory store, plus `test/postgres-store.test.ts`, which runs
 the API against a real Postgres engine (PGlite, in-process) with no server needed.
 
 To change the schema, append a new migration to `MIGRATIONS`; never edit one
-that has already shipped. `apps/api/db/*.sql` is the old SQLite reference schema
-and is no longer used.
+that has already shipped.
 
 ### Deploy the API to Netlify
 

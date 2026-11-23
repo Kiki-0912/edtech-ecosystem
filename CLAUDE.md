@@ -11,9 +11,8 @@ integrity monitoring. It has four deployable pieces plus a shared types package.
 | `apps/api/` | Fastify 5 + TypeScript (ESM), npm workspace `@edtech/api` | REST API under `/api/v1`. Auth (scrypt + HMAC tokens + SMS codes), courses, classroom, students, departments, attendance, notes, Excel, telemetry ingestion |
 | `apps/api/src/create-app.ts` | | Builds the Fastify app: CORS, the global auth `preHandler`, route registration, 404/error handlers. **Every new route module gets registered here.** |
 | `apps/api/src/routes/*.ts` | | One `FastifyPluginAsync` per domain |
-| `apps/api/src/store/db.ts` | | Data-access **facade** every route imports. `DATABASE_URL` set → `pg-store.ts` (Postgres via `pg`; migrations in `migrations.ts`, auto-applied + seeded on start); unset → `memory-store.ts` (seeded in-memory, `memory.ts` = seed data). Both implement the same async `Store` type. `apps/api/db/*.sql` is the obsolete SQLite schema |
+| `apps/api/src/store/db.ts` | | Data-access **facade** every route imports. `DATABASE_URL` set → `pg-store.ts` (Postgres via `pg`; migrations in `migrations.ts`, auto-applied + seeded on start); unset → `memory-store.ts` (seeded in-memory, `memory.ts` = seed data). Both implement the same async `Store` type |
 | `apps/api/src/services/effort.ts` | | Effort score + integrity flags. Must stay consistent with `crates/telemetry-core` |
-| `api/index.ts` | Vercel function | Serverless entry that reuses `buildApp()`. `vercel.json` rewrites everything here |
 | `packages/shared/` | TypeScript, `@edtech/shared` | Domain contracts (users, courses, telemetry, effort, `ApiError` envelopes). Source-only, no build step |
 | `apps/app/` | Flutter 3.50 (`material_ui`), `provider` + `go_router` + `http` | Client app: `lib/ui` (design system), `lib/shell` (navigation), `lib/screens/<feature>/`, `lib/models`, `lib/services`, `lib/auth` |
 | `apps/app/lib/ui/` | | **Design system.** `tokens.dart` (`AppColors` ThemeExtension, `Tone`, `AppSpacing`, `AppRadius`, `Breakpoints`, `context.colors` / `context.text`), `app_theme.dart`, `components/` (`AppPage`, `SectionCard`, `StatTile`, `StatusBadge`, `AsyncBody`, `showFormSheet`, charts…). Import via `package:edtech_app/ui/ui.dart` |
@@ -27,7 +26,7 @@ integrity monitoring. It has four deployable pieces plus a shared types package.
 
 Deploy targets: Netlify API (`apps/api/netlify.toml`; `netlify/functions/api.mts` re-exports an
 esbuild bundle of `src/netlify-handler.ts` built by `npm run build:netlify` — Netlify's Lambda can't
-`require()` ESM, so never ship Fastify unbundled; deploy with `--filter @edtech/api`), Vercel (API, `vercel.json`), Netlify (Flutter web, root `netlify.toml`),
+`require()` ESM, so never ship Fastify unbundled; deploy with `--filter @edtech/api`), Vercel (API: a project with Root Directory `apps/api`, zero-config Fastify; the repo root is not a Vercel project), Netlify (Flutter web, root `netlify.toml`),
 Docker (`Dockerfile`, `docker-compose.yml`, API on port 4000).
 
 ## Commands (run from repo root unless noted)

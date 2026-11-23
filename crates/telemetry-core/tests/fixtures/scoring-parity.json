@@ -1,0 +1,145 @@
+{
+  "description": "Shared effort-scoring fixtures. Asserted by crates/telemetry-core (cargo test) and apps/api/test/telemetry-scoring.test.ts so the Rust and TypeScript engines cannot drift.",
+  "cases": [
+    {
+      "name": "organic typing scores full marks",
+      "events": { "repeat": 200, "type": "keystroke", "payload": { "deltaMs": 120 } },
+      "expected": {
+        "keystrokes": 200,
+        "pastes": 0,
+        "pasteVolume": 0,
+        "aiTabSwitches": 0,
+        "activeSeconds": 24,
+        "score": 100,
+        "flags": ["none"]
+      }
+    },
+    {
+      "name": "active seconds round half up (59.6s -> 60s, so no idle penalty)",
+      "events": [
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 5000 } },
+        { "type": "keystroke", "payload": { "deltaMs": 4600 } },
+        { "type": "paste", "payload": { "characterCount": 10 } }
+      ],
+      "expected": {
+        "keystrokes": 12,
+        "pastes": 1,
+        "pasteVolume": 10,
+        "aiTabSwitches": 0,
+        "activeSeconds": 60,
+        "score": 55,
+        "flags": ["large_paste"]
+      }
+    },
+    {
+      "name": "payload values coerce like JavaScript Number()",
+      "events": [
+        { "type": "keystroke", "payload": { "deltaMs": "250" } },
+        { "type": "keystroke", "payload": { "deltaMs": 250.4 } },
+        { "type": "keystroke", "payload": { "deltaMs": " 1e3 \n" } },
+        { "type": "keystroke", "payload": { "deltaMs": "0x10" } },
+        { "type": "keystroke", "payload": { "deltaMs": "0b101" } },
+        { "type": "keystroke", "payload": { "deltaMs": "0o17" } },
+        { "type": "keystroke", "payload": { "deltaMs": true } },
+        { "type": "keystroke", "payload": { "deltaMs": false } },
+        { "type": "keystroke", "payload": { "deltaMs": null } },
+        { "type": "keystroke", "payload": { "deltaMs": "abc" } },
+        { "type": "keystroke", "payload": { "deltaMs": "Infinity" } },
+        { "type": "keystroke", "payload": { "deltaMs": "inf" } },
+        { "type": "keystroke", "payload": { "deltaMs": "NaN" } },
+        { "type": "keystroke", "payload": { "deltaMs": "-0x10" } },
+        { "type": "keystroke", "payload": { "deltaMs": "1e400" } },
+        { "type": "keystroke", "payload": { "deltaMs": ".5" } },
+        { "type": "keystroke", "payload": { "deltaMs": "5." } },
+        { "type": "keystroke", "payload": { "deltaMs": "+7" } },
+        { "type": "keystroke", "payload": { "deltaMs": "" } },
+        { "type": "keystroke", "payload": { "deltaMs": "1_0" } },
+        { "type": "keystroke", "payload": { "deltaMs": 9999 } },
+        { "type": "keystroke", "payload": { "deltaMs": -50 } },
+        { "type": "keystroke", "payload": { "deltaMs": [300] } },
+        { "type": "keystroke", "payload": { "deltaMs": [[" 40 "]] } },
+        { "type": "keystroke", "payload": { "deltaMs": [1, 2] } },
+        { "type": "keystroke", "payload": { "deltaMs": {} } },
+        { "type": "keystroke", "payload": {} },
+        { "type": "keystroke", "payload": null },
+        { "type": "keystroke", "payload": "deltaMs" },
+        { "type": "paste", "payload": { "characterCount": "120" } },
+        { "type": "paste", "payload": { "characterCount": 80.9 } },
+        { "type": "paste", "payload": { "characterCount": -40 } }
+      ],
+      "expected": {
+        "keystrokes": 29,
+        "pastes": 3,
+        "pasteVolume": 200,
+        "aiTabSwitches": 0,
+        "activeSeconds": 7,
+        "score": 45,
+        "flags": ["large_paste"]
+      }
+    },
+    {
+      "name": "mass paste reduces score and flags large paste and low typing",
+      "events": [
+        { "type": "keystroke", "payload": { "deltaMs": 100 } },
+        { "type": "paste", "payload": { "characterCount": 1200 } }
+      ],
+      "expected": {
+        "keystrokes": 1,
+        "pastes": 1,
+        "pasteVolume": 1200,
+        "aiTabSwitches": 0,
+        "activeSeconds": 0,
+        "score": 45,
+        "flags": ["large_paste", "low_typing_ratio"]
+      }
+    },
+    {
+      "name": "ai tab switches are counted, penalised and capped",
+      "events": [
+        { "type": "ai_tab_switch", "payload": { "host": "chatgpt.com" } },
+        { "type": "ai_tab_switch", "payload": { "host": "claude.ai" } },
+        { "type": "ai_tab_switch", "payload": { "host": "gemini.google.com" } },
+        { "type": "ai_tab_switch", "payload": { "host": "perplexity.ai" } },
+        { "type": "keystroke", "payload": { "deltaMs": 150 } }
+      ],
+      "expected": {
+        "keystrokes": 1,
+        "pastes": 0,
+        "pasteVolume": 0,
+        "aiTabSwitches": 4,
+        "activeSeconds": 0,
+        "score": 70,
+        "flags": ["ai_tab_switch"]
+      }
+    },
+    {
+      "name": "unknown and non-scoring event types are ignored",
+      "events": [
+        { "type": "cursor", "payload": { "distancePx": 40 } },
+        { "type": "focus", "payload": {} },
+        { "type": "blur", "payload": {} },
+        { "type": "scroll", "payload": { "deltaMs": 400 } },
+        { "type": 7, "payload": { "deltaMs": 400 } }
+      ],
+      "expected": {
+        "keystrokes": 0,
+        "pastes": 0,
+        "pasteVolume": 0,
+        "aiTabSwitches": 0,
+        "activeSeconds": 0,
+        "score": 100,
+        "flags": ["telemetry_gap"]
+      }
+    }
+  ]
+}

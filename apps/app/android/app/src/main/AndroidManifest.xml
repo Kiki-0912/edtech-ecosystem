@@ -1,4 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Online builds (OFFLINE_MODE=false) call the API; release builds need this
+         explicitly (debug/profile manifests add it only for tooling). -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:label="edtech_app"
         android:name="${applicationName}"

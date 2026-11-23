@@ -32,9 +32,6 @@ class _AdminAppState extends State<AdminApp> {
     _router = buildAdminRouter(_auth);
     ApiService.instance
       ..token = _auth.token
-      // Shared screens (calendar, attendance, notes) must show an error, not
-      // the main app's demo courses and events, when a request fails.
-      ..demoFallback = false
       // A 401 from any request means the session is no longer valid (expired,
       // revoked, deleted or deactivated account); the login screen says why.
       ..onUnauthorized =
@@ -54,9 +51,7 @@ class _AdminAppState extends State<AdminApp> {
   @override
   void dispose() {
     _auth.removeListener(_onAuthChanged);
-    ApiService.instance
-      ..onUnauthorized = null
-      ..demoFallback = true;
+    ApiService.instance.onUnauthorized = null;
     _access.dispose();
     _router.dispose();
     super.dispose();

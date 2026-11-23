@@ -1,7 +1,38 @@
 import type { FastifyPluginAsync, FastifyRequest } from 'fastify';
-import { getStudentsByCourse, createUser, getUsers } from '../store/db.js';
+import { randomUUID } from 'node:crypto';
+import {
+  createUser,
+  enrollStudentInDepartment,
+  getAttendanceRecords,
+  getCourse,
+  getStudentsByCourse,
+  getTeacherNotes,
+  getUsers,
+  setCourseStudents,
+} from '../store/db.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
-import type { Role } from "../store/db";
+import { bodySchema, rejectInvalidBody } from '../middleware/validation.js';
+
+const IMPORT_SCHEMA = {
+  type: 'object',
+  required: ['rows'],
+  properties: {
+    courseId: { type: ['string', 'null'] },
+    rows: {
+      type: 'array',
+      // Missing cells are reported per row below rather than failing the file.
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          rollNumber: { type: 'string' },
+          contact: { type: 'string' },
+          departmentId: { type: ['string', 'null'] },
+        },
+      },
+    },
+  },
+};
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
 
@@ -10,17 +41,23 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
   // Body: { courseId: string, rows: StudentImportRow[] }
   fastify.post(
     '/excel/import/students',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate], ...bodySchema(IMPORT_SCHEMA) },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
+      if (rejectInvalidBody(request, reply)) return reply;
       const body = request.body as {
-        courseId: string;
-        rows: { name: string; rollNumber: string; contact: string; departmentId?: string }[];
+        courseId?: string | null;
+        rows: { name?: string; rollNumber?: string; contact?: string; departmentId?: string | null }[];
       };
+      if (body.courseId && !(await getCourse(body.courseId))) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_REFERENCE', message: 'Course not found' } });
+      }
       const imported: any[] = [];
       const errors: { row: number; message: string }[] = [];
 
@@ -32,7 +69,7 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
             errors.push({ row: rowNum, message: 'Missing name, roll number, or contact' });
             continue;
           }
-          const id = `stu-${Date.now()}-${i}`;
+          const id = randomUUID();
           const now = new Date().toISOString();
           await createUser({
             id,
@@ -40,17 +77,17 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
             email: `${row.rollNumber.toLowerCase().replace(/\s/g, '')}@example.edu`,
             phone: row.contact,
             role: 'student',
-            courseIds: body.courseId ? [body.courseId] : [],
+            courseIds: [],
             passwordHash: '',
             isPhoneVerified: 0,
             createdAt: now,
           });
           if (body.courseId) {
-            const { addStudentToCourse } = await import('../store/db.js');
-            await addStudentToCourse(body.courseId, id);
+            // Keeps courses.studentIds, users.courseIds and channels in sync.
+            const course = await getCourse(body.courseId);
+            if (course) await setCourseStudents(course.id, [...course.studentIds, id]);
           }
           if (row.departmentId) {
-            const { enrollStudentInDepartment } = await import('../store/db.js');
             await enrollStudentInDepartment({
               studentId: id,
               departmentId: row.departmentId,
@@ -81,7 +118,6 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
       const { courseId } = request.query as { courseId?: string };
       let students = (await getUsers()).filter((u) => u.role === 'student');
       if (courseId) {
-        const { getStudentsByCourse } = await import('../store/db.js');
         students = await getStudentsByCourse(courseId);
       }
       const rows = students.map((s) => ({
@@ -101,7 +137,6 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
     '/excel/export/attendance',
     { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
-      const { getAttendanceRecords } = await import('../store/db.js');
       const { courseId, date } = request.query as { courseId?: string; date?: string };
       const records = await getAttendanceRecords(courseId, date);
       const rows = records.map((r) => ({
@@ -123,7 +158,6 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
     '/excel/export/notes',
     { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
-      const { getTeacherNotes } = await import('../store/db.js');
       const { courseId, courseCode } = request.query as { courseId?: string; courseCode?: string };
       const notes = await getTeacherNotes(courseId, courseCode);
       const rows = notes.map((n) => ({

@@ -1,3 +1,5 @@
+import 'package:edtech_app/formats.dart';
+
 /// Programme panel headings exactly as printed on the CTTC admissions flyer.
 class Department {
   const Department({
@@ -26,7 +28,7 @@ class Department {
       code: json['code'] as String,
       category: json['category'] as String? ?? '3 Years',
       durationMonths: (json['durationMonths'] as num?)?.toInt() ?? 36,
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      createdAt: parseServerTime(json['createdAt']),
     );
   }
 
@@ -86,7 +88,7 @@ class College {
       departments: rawDepartments
           .map((item) => Department.fromJson(item as Map<String, dynamic>))
           .toList(),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? ''),
+      createdAt: parseServerTime(json['createdAt']),
     );
   }
 

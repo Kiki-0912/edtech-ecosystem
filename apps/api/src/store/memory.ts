@@ -4,9 +4,6 @@ import type {
   ChatChannel,
   ChatMessage,
   Course,
-  EffortScore,
-  IntegrityFlag,
-  SignedTelemetryBatch,
   Submission,
   User,
 } from "./db";
@@ -250,10 +247,3 @@ export const messages: ChatMessage[] = [
     sentAt: atHours(-6),
   },
 ];
-
-export const telemetryBatches: SignedTelemetryBatch[] = [];
-export const effortScores = new Map<string, EffortScore>();
-export const integrityFlags = new Map<string, IntegrityFlag[]>();
-
-export const effortKey = (studentId: string, assignmentId: string) =>
-  `${studentId}:${assignmentId}`;

@@ -6,11 +6,33 @@ import {
   getDepartments,
   getDepartmentsByStudent,
   getStudentsByDepartment,
+  getUser,
   unenrollStudentFromDepartment,
   updateDepartment,
 } from '../store/db.js';
 import type { DepartmentCategory } from '../store/db.js';
 import { authenticate } from '../middleware/auth.js';
+import { TEXT, bodySchema, rejectInvalidBody } from '../middleware/validation.js';
+
+const CATEGORIES: DepartmentCategory[] = ['3 Years', '2 Years', '6 Months', '2 Years Paramedical'];
+
+const DEPARTMENT_PROPERTIES = {
+  name: TEXT,
+  code: TEXT,
+  category: { type: 'string', enum: CATEGORIES },
+  durationMonths: { type: 'integer', minimum: 1 },
+};
+const CREATE_DEPARTMENT_SCHEMA = {
+  type: 'object',
+  required: ['name', 'code', 'category', 'durationMonths'],
+  properties: { collegeId: TEXT, ...DEPARTMENT_PROPERTIES },
+};
+const UPDATE_DEPARTMENT_SCHEMA = { type: 'object', properties: DEPARTMENT_PROPERTIES };
+const ENROLL_SCHEMA = {
+  type: 'object',
+  required: ['departmentId'],
+  properties: { departmentId: TEXT },
+};
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
 
@@ -39,13 +61,14 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/departments - create department (admin only)
   fastify.post(
     '/departments',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate], ...bodySchema(CREATE_DEPARTMENT_SCHEMA) },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
+      if (rejectInvalidBody(request, reply)) return reply;
       const body = request.body as {
         collegeId?: string;
         name: string;
@@ -67,13 +90,14 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // PUT /api/v1/departments/:id - edit department (admin only)
   fastify.put(
     '/departments/:id',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate], ...bodySchema(UPDATE_DEPARTMENT_SCHEMA) },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
+      if (rejectInvalidBody(request, reply)) return reply;
       const body = request.body as Partial<{
         name: string;
         code: string;
@@ -127,13 +151,19 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/students/:studentId/departments - enroll
   fastify.post(
     '/students/:studentId/departments',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate], ...bodySchema(ENROLL_SCHEMA) },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
       if (caller?.role !== 'admin') {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
       }
+      if (rejectInvalidBody(request, reply)) return reply;
+      const student = await getUser((req.params as { studentId: string }).studentId);
+      if (!student || student.role !== 'student') {
+        return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Student not found' } });
+      }
+      // An unknown departmentId is rejected by the store (400 INVALID_REFERENCE).
       const body = request.body as { departmentId: string };
       const enrollment = await enrollStudentInDepartment({
         studentId: (req.params as { studentId: string }).studentId,

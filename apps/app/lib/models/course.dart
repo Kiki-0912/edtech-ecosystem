@@ -1,3 +1,5 @@
+import 'package:edtech_app/formats.dart';
+
 class Course {
   const Course({
     required this.id,
@@ -33,8 +35,7 @@ class Course {
       teacherId: json['teacherId'] as String,
       studentIds: List<String>.from(json['studentIds'] as List<dynamic>),
       term: json['term'] as String,
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+      createdAt: parseServerTime(json['createdAt']) ?? DateTime.now(),
       teacherName: json['teacherName'] as String?,
       openAssignmentCount: json['openAssignmentCount'] as int?,
     );
@@ -48,7 +49,7 @@ class Course {
       'teacherId': teacherId,
       'studentIds': studentIds,
       'term': term,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
     };
   }
 }

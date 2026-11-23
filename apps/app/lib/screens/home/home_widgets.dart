@@ -38,6 +38,7 @@ class EventList extends StatelessWidget {
       children: [
         for (final e in events.take(limit))
           ListRow(
+            key: Key('home-event-${e.id}'),
             leading: IconBadge(
                 icon: eventIcon(e.kind), tone: eventTone(e.kind), size: 36),
             title: e.title,
@@ -82,6 +83,7 @@ class CourseList extends StatelessWidget {
       children: [
         for (final c in courses.take(limit))
           ListRow(
+            key: Key('home-course-${c.id}'),
             leading: const IconBadge(
                 icon: Icons.menu_book_outlined, tone: Tone.info, size: 36),
             title: c.title,
@@ -257,6 +259,7 @@ class AssignmentProgressList extends StatelessWidget {
       children: [
         for (final p in items)
           InkWell(
+            key: Key('home-progress-${p.assignment.id}'),
             borderRadius: AppRadius.mdAll,
             onTap: () => context
                 .go('/courses/${p.course.id}/assignments/${p.assignment.id}'),

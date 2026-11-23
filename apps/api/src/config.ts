@@ -22,10 +22,53 @@ export function parseCorsOrigin(value: string | undefined): string | string[] {
   return origins.includes("*") ? "*" : origins;
 }
 
+/** Local-only signing secret used when AUTH_SECRET is unset. Never valid in production. */
+export const DEV_AUTH_SECRET = "edtech-dev-secret-change-me";
+
+/**
+ * Why this configuration must not serve traffic, or null if it is fine.
+ * Production (NODE_ENV=production, or running as a Netlify Function) needs a
+ * real AUTH_SECRET: with the public dev fallback anyone could mint tokens.
+ */
+export function unsafeConfigReason(input: {
+  nodeEnv: string | undefined;
+  authSecret: string | undefined;
+  onNetlify: boolean;
+}): string | null {
+  const production = input.nodeEnv === "production" || input.onNetlify;
+  if (!production) return null;
+  const secret = input.authSecret?.trim();
+  if (!secret || secret === DEV_AUTH_SECRET) {
+    return "AUTH_SECRET must be set to a private value in production (it is unset or the dev fallback)";
+  }
+  return null;
+}
+
+/** Netlify Functions expose a `Netlify` global and inject NETLIFY_DB_URL. */
+function runningOnNetlify(): boolean {
+  return (
+    (globalThis as { Netlify?: unknown }).Netlify !== undefined ||
+    Boolean(readEnv("NETLIFY_DB_URL")?.trim())
+  );
+}
+
+/** Throw (refusing to start) when the configuration is unsafe for production. */
+export function assertSafeConfig(): void {
+  const reason = unsafeConfigReason({
+    nodeEnv: process.env.NODE_ENV,
+    authSecret: readEnv("AUTH_SECRET"),
+    onNetlify: runningOnNetlify(),
+  });
+  if (reason) throw new Error(`Refusing to start: ${reason}`);
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
-  // Dev fallback keeps local setup frictionless; set AUTH_SECRET in production.
-  authSecret: process.env.AUTH_SECRET ?? "edtech-dev-secret-change-me",
+  // Dev fallback keeps local setup frictionless; production refuses to start
+  // without a real AUTH_SECRET (see assertSafeConfig).
+  get authSecret(): string {
+    return readEnv("AUTH_SECRET")?.trim() || DEV_AUTH_SECRET;
+  },
   host: process.env.HOST ?? "0.0.0.0",
   port: Number.isFinite(parsedPort) ? parsedPort : 4000,
   // "*" or a comma-separated list of origins, e.g. the web app and the separately

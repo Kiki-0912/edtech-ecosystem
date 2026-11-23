@@ -177,7 +177,6 @@ void main() {
       ..failures['GET /api/v1/calendar'] =
           const Failure(500, 'INTERNAL_ERROR', 'Database unreachable');
     await pumpAdminApp(tester, api, userId: 'u-admin-1');
-    expect(ApiService.instance.demoFallback, isFalse);
 
     await tester.tap(find.byKey(adminAttendance.navKey));
     await settle(tester);
