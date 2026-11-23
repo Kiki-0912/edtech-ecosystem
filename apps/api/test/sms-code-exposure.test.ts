@@ -3,11 +3,11 @@ import assert from "node:assert/strict";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/create-app";
 
-const ADMIN_PHONE = "+15550001005";
+const PHONE = "+15550001001"; // u-teacher-1 (admins cannot use SMS sign-in)
 let app: FastifyInstance;
 
 const sendSms = () =>
-  app.inject({ method: "POST", url: "/api/v1/auth/send-sms", payload: { phone: ADMIN_PHONE } });
+  app.inject({ method: "POST", url: "/api/v1/auth/send-sms", payload: { phone: PHONE } });
 
 before(async () => {
   delete process.env.SMS_DEV_ECHO;
@@ -38,7 +38,7 @@ test("local demos can opt in with SMS_DEV_ECHO=true", async () => {
   const verify = await app.inject({
     method: "POST",
     url: "/api/v1/auth/verify-sms",
-    payload: { phone: ADMIN_PHONE, code },
+    payload: { phone: PHONE, code },
   });
   assert.equal(verify.statusCode, 200, verify.body);
 });

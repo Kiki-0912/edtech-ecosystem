@@ -60,13 +60,20 @@ before(async () => {
   headers.student2 = await login(STUDENT_2);
   headers.admin = await login(ADMIN);
 
-  const register = await app.inject({
+  // Public sign-up only creates students; staff accounts come from an admin.
+  const created = await app.inject({
     method: "POST",
-    url: "/api/v1/auth/register",
-    payload: { phone: "+15558880001", password: "secret123", role: "teacher" },
+    url: "/api/v1/admin/users",
+    headers: headers.admin,
+    payload: {
+      displayName: "Other Teacher",
+      phone: "+15558880001",
+      password: "secret123",
+      role: "teacher",
+    },
   });
-  assert.equal(register.statusCode, 201, register.body);
-  headers.otherTeacher = { authorization: `Bearer ${register.json().data.token}` };
+  assert.equal(created.statusCode, 201, created.body);
+  headers.otherTeacher = await login("+15558880001", "secret123");
 });
 
 after(async () => {

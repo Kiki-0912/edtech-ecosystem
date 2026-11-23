@@ -8,13 +8,31 @@ const readEnv = (key: string): string | undefined => {
   return process.env[key] ?? netlifyEnv?.get(key) ?? undefined;
 };
 
+/**
+ * CORS_ORIGIN as @fastify/cors expects it: "*" (the default when unset), or
+ * the list of allowed origins. A browser accepts one origin per response, so a
+ * list is matched against the request's Origin instead of being sent as is.
+ */
+export function parseCorsOrigin(value: string | undefined): string | string[] {
+  if (value === undefined) return "*";
+  const origins = value
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+  return origins.includes("*") ? "*" : origins;
+}
+
 export const config = {
   env: process.env.NODE_ENV ?? "development",
   // Dev fallback keeps local setup frictionless; set AUTH_SECRET in production.
   authSecret: process.env.AUTH_SECRET ?? "edtech-dev-secret-change-me",
   host: process.env.HOST ?? "0.0.0.0",
   port: Number.isFinite(parsedPort) ? parsedPort : 4000,
-  corsOrigin: process.env.CORS_ORIGIN ?? "*",
+  // "*" or a comma-separated list of origins, e.g. the web app and the separately
+  // deployed admin console: "https://app.example.org,https://admin.example.org".
+  get corsOrigin(): string | string[] {
+    return parseCorsOrigin(process.env.CORS_ORIGIN);
+  },
   // Postgres connection string. Unset = seeded in-memory store (resets on restart).
   // NETLIFY_DB_URL is injected into functions by Netlify Database. Read lazily:
   // platform variables may only be available once a function is invoked.

@@ -45,15 +45,18 @@ void main() {
     expect(find.text('Please enter your password'), findsOneWidget);
   });
 
-  testWidgets('sign up as a teacher lands on the dashboard', (tester) async {
+  testWidgets('sign up creates a student and lands on the dashboard',
+      (tester) async {
     final auth = await _pumpApp(tester);
     await tester.tap(find.byKey(const Key('login-create-account')));
     await _settle(tester);
 
-    // Admin is not offered: the API only accepts student/teacher.
+    // No role choice: public sign-up is student-only (teachers and admins are
+    // created by an admin).
+    expect(find.byKey(const Key('signup-role')), findsNothing);
+    expect(find.text('Teacher'), findsNothing);
     expect(find.text('Admin'), findsNothing);
-    await tester.tap(find.text('Teacher'));
-    await tester.enterText(find.byKey(const Key('signup-name')), 'Ada Teacher');
+    await tester.enterText(find.byKey(const Key('signup-name')), 'Ada Student');
     await tester.enterText(
         find.byKey(const Key('signup-email')), 'ada@example.edu');
     await tester.enterText(
@@ -68,7 +71,7 @@ void main() {
     await _settle(tester);
 
     expect(auth.isAuthenticated, isTrue);
-    expect(auth.user?.role, 'teacher');
+    expect(auth.user?.role, 'student');
     // Previously the user stayed on the sign-up page (no router refresh).
     expect(find.byKey(const Key('signup-submit')), findsNothing);
     expect(find.byKey(const Key('nav-home')), findsOneWidget);
@@ -97,19 +100,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  test('offline register rejects the admin role like the API', () async {
+  for (final role in ['teacher', 'admin']) {
+    test('offline register rejects the $role role like the API', () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final api = ApiService.instance..offlineMode = true;
+      await expectLater(
+        api.register(
+          phone: '+1555',
+          email: 'x@example.edu',
+          displayName: 'X',
+          password: 'secret123',
+          role: role,
+        ),
+        throwsA(isA<ApiException>()
+            .having((e) => e.statusCode, 'status', 400)
+            .having((e) => e.code, 'code', 'INVALID_BODY')
+            .having(
+                (e) => e.message,
+                'message',
+                'Public sign-up creates student accounts; '
+                    'teachers are added by an admin')),
+      );
+    });
+  }
+
+  test('offline register creates a student by default', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final api = ApiService.instance..offlineMode = true;
-    expect(
-      () => api.register(
-        phone: '+1555',
-        email: 'x@example.edu',
-        displayName: 'X',
-        password: 'secret123',
-        role: 'admin',
-      ),
-      throwsA(isA<ApiException>().having(
-          (e) => e.message, 'message', 'Role must be student or teacher')),
+    final data = await api.register(
+      phone: '+1555',
+      email: 'x@example.edu',
+      displayName: 'X',
+      password: 'secret123',
     );
+    expect((data['user'] as Map<String, dynamic>)['role'], 'student');
   });
 }

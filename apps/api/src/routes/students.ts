@@ -15,28 +15,45 @@ import {
 } from '../store/db.js';
 import { authenticate } from '../middleware/auth.js';
 import type { User, Role } from "../store/db";
+import type { StudentSummary } from '@edtech/shared';
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
 
 const studentsRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/v1/students - list all students (admin/teacher)
+  // GET /api/v1/students - list all students (admin/teacher). A student gets
+  // only their classmates (students sharing a course), as names without
+  // contact details: enough for chat, and nobody's phone or email.
   fastify.get(
     '/students',
     { preHandler: [authenticate] },
     async (request, reply) => {
       const users = await getUsers();
       const students = users.filter((u) => u.role === 'student');
-      return reply.send({ data: students });
+      const caller = (request as AuthRequest).user;
+      if (caller?.role !== 'student') {
+        return reply.send({ data: students });
+      }
+      const mine = new Set(students.find((u) => u.id === caller.id)?.courseIds ?? []);
+      const classmates: StudentSummary[] = students
+        .filter((u) => u.id === caller.id || u.courseIds.some((id) => mine.has(id)))
+        .map(({ id, displayName, role }) => ({ id, displayName, role }));
+      return reply.send({ data: classmates });
     }
   );
 
-  // GET /api/v1/students/:id - get a single student
+  // GET /api/v1/students/:id - get a single student (staff, or a student's own record)
   fastify.get(
     '/students/:id',
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const user = (await getUsers()).find((u) => u.id === (req.params as { id: string }).id);
+      const id = (req.params as { id: string }).id;
+      if (req.user?.role === 'student' && req.user.id !== id) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'Students can only view their own record' } });
+      }
+      const user = (await getUsers()).find((u) => u.id === id);
       if (!user || user.role !== 'student') {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Student not found' } });
       }

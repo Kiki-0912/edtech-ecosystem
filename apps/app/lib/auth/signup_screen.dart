@@ -5,8 +5,9 @@ import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
-/// Self-service registration. Only students and teachers can sign up; admin
-/// accounts are provisioned (the API rejects role=admin on /auth/register).
+/// Self-service registration. It always creates a student account: teachers
+/// and admins are added by an admin (the API rejects any other role on
+/// /auth/register).
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -20,7 +21,6 @@ class _SignupScreenState extends State<SignupScreen> {
   final _email = TextEditingController();
   final _phone = TextEditingController();
   final _password = TextEditingController();
-  String _role = 'student';
 
   @override
   void dispose() {
@@ -39,7 +39,6 @@ class _SignupScreenState extends State<SignupScreen> {
       email: _email.text.trim(),
       displayName: _name.text.trim(),
       password: _password.text,
-      role: _role,
     );
     if (!mounted) return;
     if (ok) {
@@ -65,7 +64,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
     return AuthLayout(
       title: 'Create your account',
-      subtitle: 'Join your classes, track deadlines and stay in touch.',
+      subtitle: 'Join your classes as a student. Teachers get their account '
+          'from an administrator.',
       onBack: _back,
       footer: Wrap(
         alignment: WrapAlignment.center,
@@ -81,24 +81,6 @@ class _SignupScreenState extends State<SignupScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('I am a', style: context.text.labelMedium),
-              const SizedBox(height: AppSpacing.xs),
-              SegmentedButton<String>(
-                key: const Key('signup-role'),
-                segments: const [
-                  ButtonSegment(
-                      value: 'student',
-                      icon: Icon(Icons.school_outlined),
-                      label: Text('Student')),
-                  ButtonSegment(
-                      value: 'teacher',
-                      icon: Icon(Icons.co_present_outlined),
-                      label: Text('Teacher')),
-                ],
-                selected: {_role},
-                onSelectionChanged: (s) => setState(() => _role = s.first),
-              ),
-              const SizedBox(height: AppSpacing.md),
               TextFormField(
                 key: const Key('signup-name'),
                 controller: _name,

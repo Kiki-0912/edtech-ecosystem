@@ -18,6 +18,7 @@ integrity monitoring. It has four deployable pieces plus a shared types package.
 | `apps/app/` | Flutter 3.50 (`material_ui`), `provider` + `go_router` + `http` | Client app: `lib/ui` (design system), `lib/shell` (navigation), `lib/screens/<feature>/`, `lib/models`, `lib/services`, `lib/auth` |
 | `apps/app/lib/ui/` | | **Design system.** `tokens.dart` (`AppColors` ThemeExtension, `Tone`, `AppSpacing`, `AppRadius`, `Breakpoints`, `context.colors` / `context.text`), `app_theme.dart`, `components/` (`AppPage`, `SectionCard`, `StatTile`, `StatusBadge`, `AsyncBody`, `showFormSheet`, charts…). Import via `package:edtech_app/ui/ui.dart` |
 | `apps/app/lib/router.dart` + `lib/shell/` | | `GoRouter` with `StatefulShellRoute` (one branch per destination, order = `kDestinations`), `refreshListenable: auth`, role guards (`kRoleGuards`). `AppShell` = bottom bar <600px, rail <1024px, sidebar ≥1024px. `navForRole` decides each role's tabs |
+| `apps/app/lib/main_admin.dart` + `lib/admin/` | | **Separate admin console** (own web build: `scripts/build_admin_web.sh`, own Netlify site). Online-only (never the offline client), admin-only sign-in; talks to `/api/v1/admin/*` (`apps/api/src/routes/admin.ts`, one plugin-level admin guard) and reuses the academic screens |
 | `apps/app/lib/services/api_service.dart` | | Singleton HTTP client for every API call |
 | `apps/app/lib/services/offline_client.dart` + `offline_store.dart` | | In-process fake of the **whole API**, persisted with `shared_preferences`. `OFFLINE_MODE` defaults to `true` |
 | `apps/extension/` | Manifest V3, plain JS (no build) | "Integrity Lens" telemetry extension: consent gate, signed batch upload |
@@ -63,8 +64,8 @@ cargo fmt --manifest-path crates/telemetry-core/Cargo.toml -- --check
 ```
 
 Baseline after the Postgres work (2026-11-22): typecheck clean; `npm run test:api`
-42 pass (13 of them run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
-included); `flutter test` ~89 pass, with `api_integration_test.dart` skipping
+102 pass (several run against Postgres via in-process PGlite); `flutter analyze` reports **no issues** (keep it that way, infos
+included); `flutter test` ~186 pass, with `api_integration_test.dart` skipping
 unless the API is running (10 pass when it is). Rust: 3 tests pass, clippy and
 `cargo fmt --check` clean. CI runs Node 22 (`node --test` globs need Node ≥ 21).
 

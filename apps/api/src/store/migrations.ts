@@ -248,4 +248,23 @@ CREATE TABLE student_departments (
 CREATE INDEX idx_student_dept_dept ON student_departments (department_id);
 `,
   },
+  {
+    // Admins can disable an account without deleting it.
+    version: 2,
+    name: "users_is_active",
+    sql: `
+ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
+`,
+  },
+  {
+    // Tokens carry the user's token_version; bumping it (password reset,
+    // deactivation, role change) revokes every token issued before. SMS codes
+    // count wrong guesses and stop working after the limit.
+    version: 3,
+    name: "auth_hardening",
+    sql: `
+ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE sms_verification_codes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+`,
+  },
 ];

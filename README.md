@@ -233,7 +233,7 @@ Environment variables are documented in `apps/api/.env.example`:
 | `NODE_ENV` | `development` | Log level selection; also controls whether SMS codes are echoed in responses |
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `4000` | HTTP port |
-| `CORS_ORIGIN` | `*` | Allowed CORS origin |
+| `CORS_ORIGIN` | `*` | Allowed CORS origin(s): `*`, one origin, or a comma-separated list (e.g. the main web app and the admin console) |
 | `AUTH_SECRET` | dev-only fallback | HMAC key for bearer tokens; **set this in production** |
 | `DATABASE_URL` | unset | Postgres connection string. Unset = in-memory store |
 | `DATABASE_POOL_MAX` | `5` | Max pooled connections per process |
@@ -317,7 +317,7 @@ project so Vercel detects `apps/api/src/index.ts` as the function entry point:
 5. Add these environment variables:
    - `AUTH_SECRET` — a long random value (for example from
      `openssl rand -hex 32`); required in production.
-   - `CORS_ORIGIN` — `*` for a demo, or the exact web app origin.
+   - `CORS_ORIGIN` — `*` for a demo, or a comma-separated list of the web app and admin console origins.
    - `NODE_ENV` — `production`.
    - `DATABASE_URL` — a hosted Postgres connection string (for example a free
      Neon or Supabase database; append `?sslmode=require` if the provider

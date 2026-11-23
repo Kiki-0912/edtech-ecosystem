@@ -101,13 +101,46 @@ class ErrorState extends StatelessWidget {
   }
 }
 
+/// Inline error message for forms and sign-in pages, where a toast would be
+/// hidden behind a bottom sheet or dialog.
+class FormErrorBanner extends StatelessWidget {
+  const FormErrorBanner({super.key, required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration:
+          BoxDecoration(color: c.dangerSoft, borderRadius: AppRadius.mdAll),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline_rounded, size: 20, color: c.danger),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(message,
+                style: context.text.bodyMedium?.copyWith(color: c.textPrimary)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Strips noisy exception prefixes for display.
 String friendlyError(Object error) {
   var s = error.toString();
   for (final prefix in ['Exception: ', 'ApiException: ', 'Bad state: ']) {
     if (s.startsWith(prefix)) s = s.substring(prefix.length);
   }
-  if (s.contains('SocketException') || s.contains('TimeoutException')) {
+  // On the web, package:http reports an unreachable server or a CORS refusal
+  // as `ClientException: Failed to fetch, uri=...`.
+  if (s.contains('SocketException') ||
+      s.contains('TimeoutException') ||
+      s.contains('ClientException') ||
+      s.contains('Failed to fetch')) {
     return 'Could not reach the server. Check your connection and try again.';
   }
   return s;

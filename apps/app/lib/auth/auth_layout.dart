@@ -159,6 +159,7 @@ class PasswordField extends StatefulWidget {
     this.validator,
     this.onSubmitted,
     this.textInputAction = TextInputAction.done,
+    this.autofillHints = const [AutofillHints.password],
   });
 
   final TextEditingController controller;
@@ -166,6 +167,11 @@ class PasswordField extends StatefulWidget {
   final FormFieldValidator<String>? validator;
   final ValueChanged<String>? onSubmitted;
   final TextInputAction textInputAction;
+
+  /// The signed-in person's own password by default. Use
+  /// [AutofillHints.newPassword] for a password being set for someone else,
+  /// so password managers neither fill nor overwrite the saved one.
+  final List<String> autofillHints;
 
   @override
   State<PasswordField> createState() => _PasswordFieldState();
@@ -182,7 +188,7 @@ class _PasswordFieldState extends State<PasswordField> {
       validator: widget.validator,
       textInputAction: widget.textInputAction,
       onFieldSubmitted: widget.onSubmitted,
-      autofillHints: const [AutofillHints.password],
+      autofillHints: widget.autofillHints,
       decoration: InputDecoration(
         labelText: widget.label,
         prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),

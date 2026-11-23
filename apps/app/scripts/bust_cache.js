@@ -1,9 +1,12 @@
 // Post-build: append a content hash to main.dart.js references so browsers
 // and the Flutter service worker always fetch the latest bundle.
+// Usage: node scripts/bust_cache.js [webDir]   (default: build/web)
 const fs = require("fs");
 const path = require("path");
 
-const webDir = path.join(__dirname, "..", "build", "web");
+const webDir = process.argv[2]
+  ? path.resolve(process.argv[2])
+  : path.join(__dirname, "..", "build", "web");
 const mainJs = path.join(webDir, "main.dart.js");
 const bootstrapJs = path.join(webDir, "flutter_bootstrap.js");
 

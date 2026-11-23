@@ -128,11 +128,7 @@ class _StudentsScreenState extends State<StudentsScreen> {
   }
 
   Future<void> _import() async {
-    final result = await showFormSheet<Map<String, dynamic>>(
-      context,
-      title: 'Import students',
-      builder: (_) => _ImportForm(courses: _courses),
-    );
+    final result = await showStudentImport(context, _courses);
     if (result == null || !mounted) return;
     final imported = result['imported'] ?? 0;
     final errors = (result['errors'] as List?)?.length ?? 0;
@@ -495,6 +491,16 @@ class _StudentFormState extends State<_StudentForm> {
     );
   }
 }
+
+/// Opens the paste-a-CSV student import form (also used by the admin console).
+/// Returns the API's import result, or null when dismissed.
+Future<Map<String, dynamic>?> showStudentImport(
+        BuildContext context, List<Course> courses) =>
+    showFormSheet<Map<String, dynamic>>(
+      context,
+      title: 'Import students',
+      builder: (_) => _ImportForm(courses: courses),
+    );
 
 class _ImportForm extends StatefulWidget {
   const _ImportForm({required this.courses});
