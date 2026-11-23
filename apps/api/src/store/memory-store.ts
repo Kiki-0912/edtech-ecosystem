@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { IntegrityRow, Overview } from "@edtech/shared";
 import {
   assignments as seedAssignments,
   calendarEvents as seedCalendarEvents,
@@ -8,6 +9,7 @@ import {
   submissions as seedSubmissions,
   users as seedUsers,
 } from "./memory";
+import { MIGRATIONS } from "./migrations";
 
 // ============================================
 // Types
@@ -24,6 +26,7 @@ export interface User {
   courseIds: string[];
   passwordHash?: string;
   isPhoneVerified?: boolean;
+  isActive?: boolean;
   createdAt: string;
 }
 
@@ -529,7 +532,10 @@ export function buildSeedRows(options: SeedOptions = {}): Tables {
     },
   ];
 
-  db.schema_version = [{ version: 1, applied_at: nowISO() }];
+  // The in-memory tables mirror the latest Postgres schema.
+  db.schema_version = [
+    { version: Math.max(...MIGRATIONS.map((migration) => migration.version)), applied_at: nowISO() },
+  ];
   return db;
 }
 
@@ -556,6 +562,8 @@ function toUser(row: Row): User {
     role: row.role as Role,
     courseIds: parseJson(row.course_ids, []),
     isPhoneVerified: Boolean(row.is_phone_verified),
+    // Rows from before migration 2 have no column: active, like its default.
+    isActive: row.is_active === undefined || row.is_active === null ? true : Boolean(row.is_active),
     createdAt: normDate(row.created_at) ?? row.created_at,
   };
 }
@@ -756,11 +764,33 @@ export function createUser(input: {
     course_ids: JSON.stringify(input.courseIds),
     password_hash: input.passwordHash,
     is_phone_verified: input.isPhoneVerified,
+    is_active: true,
+    token_version: 0,
     created_at: createdAt,
   });
   return getUser(input.id)!;
 }
 
+/**
+ * A user plus the token version their bearer tokens must carry. Kept off
+ * `User` so it never reaches a response.
+ */
+export function getSessionUser(userId: string): { user: User; tokenVersion: number } | undefined {
+  const row = db.users.find((user) => user.id === userId);
+  // Rows from before migration 3 have no column: version 0, like its default.
+  return row ? { user: toUser(row), tokenVersion: Number(row.token_version ?? 0) } : undefined;
+}
+
+const isActiveAdminRow = (row: Row) => row.role === "admin" && row.is_active !== false;
+
+export type UpdateUserResult = "updated" | "not_found" | "last_admin";
+
+/**
+ * Update a user. Refused with "last_admin" (nothing written) when it would
+ * demote or deactivate the only active admin; the check and the write are one
+ * step, so two concurrent requests cannot both pass it. A new password, a role
+ * change or a deactivation bumps the token version, revoking existing tokens.
+ */
 export function updateUser(
   userId: string,
   updates: Partial<{
@@ -769,10 +799,24 @@ export function updateUser(
     phone: string;
     passwordHash: string;
     isPhoneVerified: number;
+    role: Role;
+    isActive: boolean;
   }>,
-): void {
+): UpdateUserResult {
   const row = db.users.find((user) => user.id === userId);
-  if (!row) return;
+  if (!row) return "not_found";
+  const roleChanged = updates.role !== undefined && updates.role !== row.role;
+  const deactivating = updates.isActive === false && row.is_active !== false;
+  if (
+    isActiveAdminRow(row) &&
+    (roleChanged || deactivating) &&
+    !db.users.some((other) => other.id !== userId && isActiveAdminRow(other))
+  ) {
+    return "last_admin";
+  }
+  if (updates.passwordHash !== undefined || roleChanged || deactivating) {
+    row.token_version = Number(row.token_version ?? 0) + 1;
+  }
   if (updates.displayName !== undefined) row.display_name = updates.displayName;
   if (updates.email !== undefined) row.email = updates.email;
   if (updates.phone !== undefined) row.phone = updates.phone;
@@ -780,6 +824,9 @@ export function updateUser(
   if (updates.isPhoneVerified !== undefined) {
     row.is_phone_verified = updates.isPhoneVerified;
   }
+  if (updates.role !== undefined) row.role = updates.role;
+  if (updates.isActive !== undefined) row.is_active = updates.isActive;
+  return "updated";
 }
 
 // ============================================
@@ -1142,32 +1189,63 @@ export function setIntegrityFlags(
 // SMS verification
 // ============================================
 
-export function createSmsCode(input: {
-  id: string;
-  phone: string;
-  code: string;
-  expiresAt: string;
-  createdAt?: string;
-}): SmsCode {
-  const row = {
+/** How many codes a phone may be sent per window. */
+export interface SmsSendLimit {
+  /** ISO time; codes created after it count toward the limit. */
+  windowStart: string;
+  maxPerWindow: number;
+}
+
+/**
+ * Issue a code for a phone. Only the newest code for a phone can be verified,
+ * so this replaces any earlier one. Returns "rate_limited" (nothing stored)
+ * when the phone already got `maxPerWindow` codes since `windowStart`; codes
+ * from before the window are dropped.
+ */
+export function createSmsCode(
+  input: {
+    id: string;
+    phone: string;
+    code: string;
+    expiresAt: string;
+    createdAt?: string;
+  },
+  limit: SmsSendLimit,
+): SmsCode | "rate_limited" {
+  const sent = db.sms_verification_codes.filter(
+    (entry) => entry.phone === input.phone && entry.created_at > limit.windowStart,
+  );
+  if (sent.length >= limit.maxPerWindow) return "rate_limited";
+  db.sms_verification_codes = db.sms_verification_codes.filter(
+    (entry) => entry.phone !== input.phone || entry.created_at > limit.windowStart,
+  );
+  db.sms_verification_codes.push({
     id: input.id,
     phone: input.phone,
     code: input.code,
     expires_at: input.expiresAt,
+    attempts: 0,
     created_at: input.createdAt || nowISO(),
-  };
-  db.sms_verification_codes.push(row);
+  });
   return input;
 }
 
-export function verifySmsCode(phone: string, code: string): boolean {
-  const index = db.sms_verification_codes.findIndex(
-    (entry) => entry.phone === phone && entry.code === code,
-  );
-  if (index === -1) return false;
-  const [row] = db.sms_verification_codes.splice(index, 1);
+/**
+ * Check `code` against the newest code sent to `phone`. A wrong guess counts
+ * against it, and after `maxAttempts` wrong guesses it never matches. A match
+ * consumes every code for the phone.
+ */
+export function verifySmsCode(phone: string, code: string, maxAttempts: number): boolean {
+  const row = db.sms_verification_codes.filter((entry) => entry.phone === phone).at(-1);
+  if (!row || Number(row.attempts ?? 0) >= maxAttempts) return false;
   const expiresAt = normDate(row.expires_at);
-  return Boolean(expiresAt && new Date(expiresAt).getTime() > Date.now());
+  if (!expiresAt || new Date(expiresAt).getTime() <= Date.now()) return false;
+  if (row.code !== code) {
+    row.attempts = Number(row.attempts ?? 0) + 1;
+    return false;
+  }
+  db.sms_verification_codes = db.sms_verification_codes.filter((entry) => entry.phone !== phone);
+  return true;
 }
 
 export function markPhoneVerified(phone: string): void {
@@ -1383,4 +1461,261 @@ export function getStudentsByCourse(courseId: string): User[] {
   return db.users
     .filter((user) => user.role === "student" && studentIds.has(user.id))
     .map(toUser);
+}
+
+// ============================================
+// Admin console
+// ============================================
+//
+// These mirror pg-store.ts, including what Postgres does through foreign keys
+// (ON DELETE CASCADE, or refusing to delete a referenced row).
+
+/** `id` added to (or removed from) a JSON id list, as the stored JSON string. */
+function withId(ids: unknown, id: string): string {
+  const list = parseJson<string[]>(ids, []);
+  return JSON.stringify(list.includes(id) ? list : [...list, id]);
+}
+
+function withoutId(ids: unknown, id: string): string {
+  return JSON.stringify(parseJson<string[]>(ids, []).filter((entry) => entry !== id));
+}
+
+export type DeleteUserResult = "deleted" | "not_found" | "in_use" | "last_admin";
+
+/**
+ * Delete a user and everything that belongs only to them: roster and channel
+ * membership, chat messages, submissions, attendance, telemetry, effort scores,
+ * integrity flags and department enrollments. The only active admin is
+ * "last_admin", and a user who still teaches a course or authored course notes
+ * is "in_use"; in both cases nothing is deleted.
+ */
+export function deleteUser(userId: string): DeleteUserResult {
+  const user = db.users.find((row) => row.id === userId);
+  if (!user) return "not_found";
+  if (
+    isActiveAdminRow(user) &&
+    !db.users.some((other) => other.id !== userId && isActiveAdminRow(other))
+  ) {
+    return "last_admin";
+  }
+  // courses.teacher_id and teacher_notes.author_id have no ON DELETE action.
+  if (
+    db.courses.some((course) => course.teacher_id === userId) ||
+    db.teacher_notes.some((note) => note.author_id === userId)
+  ) {
+    return "in_use";
+  }
+
+  for (const course of db.courses) {
+    if (parseJson<string[]>(course.student_ids, []).includes(userId)) {
+      course.student_ids = withoutId(course.student_ids, userId);
+    }
+  }
+  for (const channel of db.chat_channels) {
+    if (parseJson<string[]>(channel.member_ids, []).includes(userId)) {
+      channel.member_ids = withoutId(channel.member_ids, userId);
+    }
+  }
+  db.chat_messages = db.chat_messages.filter((message) => message.author_id !== userId);
+  db.submissions = db.submissions.filter((submission) => submission.student_id !== userId);
+  db.attendance_records = db.attendance_records.filter((record) => record.student_id !== userId);
+  db.telemetry_batches = db.telemetry_batches.filter((batch) => batch.studentId !== userId);
+  db.effort_scores = db.effort_scores.filter((score) => score.studentId !== userId);
+  db.integrity_flags = db.integrity_flags.filter((entry) => entry.studentId !== userId);
+  db.student_departments = db.student_departments.filter(
+    (entry) => entry.student_id !== userId,
+  );
+  if (user.phone) {
+    db.sms_verification_codes = db.sms_verification_codes.filter(
+      (code) => code.phone !== user.phone,
+    );
+  }
+  db.users = db.users.filter((row) => row.id !== userId);
+  return "deleted";
+}
+
+/** Create a course; it is added to the teacher's courseIds (taught courses). */
+export function createCourse(input: {
+  title: string;
+  code: string;
+  term: string;
+  teacherId: string;
+}): Course {
+  const row = {
+    id: randomUUID(),
+    title: input.title,
+    code: input.code,
+    teacher_id: input.teacherId,
+    student_ids: "[]",
+    term: input.term,
+    created_at: nowISO(),
+  };
+  db.courses.push(row);
+  const teacher = db.users.find((user) => user.id === input.teacherId);
+  if (teacher) teacher.course_ids = withId(teacher.course_ids, row.id);
+  return toCourse(row);
+}
+
+/**
+ * Update a course. A new teacher takes the previous one's place in the
+ * course's chat channels and in the teachers' courseIds.
+ */
+export function updateCourse(
+  courseId: string,
+  updates: Partial<{ title: string; code: string; term: string; teacherId: string }>,
+): Course | undefined {
+  const row = db.courses.find((course) => course.id === courseId);
+  if (!row) return undefined;
+  if (updates.title !== undefined) row.title = updates.title;
+  if (updates.code !== undefined) row.code = updates.code;
+  if (updates.term !== undefined) row.term = updates.term;
+  const previous: string = row.teacher_id;
+  const next = updates.teacherId;
+  if (next !== undefined && next !== previous) {
+    row.teacher_id = next;
+    for (const user of db.users) {
+      if (user.id === previous) user.course_ids = withoutId(user.course_ids, courseId);
+      if (user.id === next) user.course_ids = withId(user.course_ids, courseId);
+    }
+    for (const channel of db.chat_channels) {
+      if (channel.course_id !== courseId) continue;
+      channel.member_ids = withId(withoutId(channel.member_ids, previous), next);
+    }
+  }
+  return toCourse(row);
+}
+
+/**
+ * Delete a course with its assignments (and their submissions, telemetry,
+ * effort scores and integrity flags), chat channels and messages, course
+ * calendar events, attendance and notes. Returns false if it doesn't exist.
+ */
+export function deleteCourse(courseId: string): boolean {
+  if (!db.courses.some((course) => course.id === courseId)) return false;
+  const assignmentIds = new Set(
+    db.assignments
+      .filter((assignment) => assignment.course_id === courseId)
+      .map((assignment) => assignment.id as string),
+  );
+  const channelIds = new Set(
+    db.chat_channels
+      .filter((channel) => channel.course_id === courseId)
+      .map((channel) => channel.id as string),
+  );
+
+  db.submissions = db.submissions.filter(
+    (submission) => !assignmentIds.has(submission.assignment_id),
+  );
+  db.telemetry_batches = db.telemetry_batches.filter(
+    (batch) => !assignmentIds.has(batch.assignmentId),
+  );
+  db.effort_scores = db.effort_scores.filter((score) => !assignmentIds.has(score.assignmentId));
+  db.integrity_flags = db.integrity_flags.filter(
+    (entry) => !assignmentIds.has(entry.assignmentId),
+  );
+  db.assignments = db.assignments.filter((assignment) => assignment.course_id !== courseId);
+  db.chat_messages = db.chat_messages.filter((message) => !channelIds.has(message.channel_id));
+  db.chat_channels = db.chat_channels.filter((channel) => channel.course_id !== courseId);
+  db.calendar_events = db.calendar_events.filter((event) => event.course_id !== courseId);
+  db.attendance_records = db.attendance_records.filter(
+    (record) => record.course_id !== courseId,
+  );
+  db.teacher_notes = db.teacher_notes.filter((note) => note.course_id !== courseId);
+  for (const user of db.users) {
+    if (parseJson<string[]>(user.course_ids, []).includes(courseId)) {
+      user.course_ids = withoutId(user.course_ids, courseId);
+    }
+  }
+  db.courses = db.courses.filter((course) => course.id !== courseId);
+  return true;
+}
+
+/**
+ * Replace a course roster. Students' courseIds follow the roster (added and
+ * removed), and the course's chat channels gain the added students and lose
+ * the removed ones. The caller checks that every id is a student.
+ */
+export function setCourseStudents(courseId: string, studentIds: string[]): Course | undefined {
+  const row = db.courses.find((course) => course.id === courseId);
+  if (!row) return undefined;
+  const previous = parseJson<string[]>(row.student_ids, []);
+  const next = [...new Set(studentIds)];
+  const roster = new Set(next);
+  const added = next.filter((id) => !previous.includes(id));
+  const removed = previous.filter((id) => !roster.has(id));
+
+  row.student_ids = JSON.stringify(next);
+  for (const user of db.users) {
+    if (roster.has(user.id)) {
+      user.course_ids = withId(user.course_ids, courseId);
+    } else if (
+      user.role === "student" &&
+      parseJson<string[]>(user.course_ids, []).includes(courseId)
+    ) {
+      user.course_ids = withoutId(user.course_ids, courseId);
+    }
+  }
+  for (const channel of db.chat_channels) {
+    if (channel.course_id !== courseId) continue;
+    let members = channel.member_ids;
+    for (const id of removed) members = withoutId(members, id);
+    for (const id of added) members = withId(members, id);
+    channel.member_ids = members;
+  }
+  return toCourse(row);
+}
+
+/**
+ * Effort score and integrity flags per student + assignment. Like
+ * getEffortScore, the first recorded session is the pair's score.
+ */
+export function getIntegrityRows(): IntegrityRow[] {
+  const seen = new Set<string>();
+  const rows: IntegrityRow[] = [];
+  for (const score of db.effort_scores) {
+    const key = `${score.studentId}\u0000${score.assignmentId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const student = db.users.find((user) => user.id === score.studentId);
+    const assignment = db.assignments.find((entry) => entry.id === score.assignmentId);
+    const course = assignment && db.courses.find((entry) => entry.id === assignment.course_id);
+    if (!student || !assignment || !course) continue;
+    rows.push({
+      studentId: score.studentId,
+      studentName: student.display_name,
+      assignmentId: score.assignmentId,
+      assignmentTitle: assignment.title,
+      courseId: course.id,
+      courseTitle: course.title,
+      score: score.score,
+      flags: getIntegrityFlags(score.studentId, score.assignmentId),
+      computedAt: score.computedAt,
+    });
+  }
+  return rows;
+}
+
+/** Overview counts that are plain row counts (flagged reports come from getIntegrityRows). */
+export type EntityCounts = Omit<Overview["counts"], "flaggedReports">;
+
+export function getEntityCounts(): EntityCounts {
+  const users = db.users.map(toUser);
+  const byRole = (role: Role) => users.filter((user) => user.role === role).length;
+  return {
+    students: byRole("student"),
+    teachers: byRole("teacher"),
+    admins: byRole("admin"),
+    inactiveUsers: users.filter((user) => user.isActive === false).length,
+    courses: db.courses.length,
+    departments: db.departments.length,
+    assignments: db.assignments.length,
+    submissions: db.submissions.length,
+    telemetryBatches: db.telemetry_batches.length,
+  };
+}
+
+/** Highest applied schema migration, or null if none is recorded. */
+export function getSchemaVersion(): number | null {
+  const versions = db.schema_version.map((row) => Number(row.version));
+  return versions.length > 0 ? Math.max(...versions) : null;
 }

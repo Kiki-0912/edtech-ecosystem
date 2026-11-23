@@ -25,7 +25,7 @@ class _EdTechAppState extends State<EdTechApp> {
     _router = buildRouter(_auth);
     ApiService.instance.token = _auth.token;
     // A 401 from any request means the session is no longer valid.
-    ApiService.instance.onUnauthorized = () {
+    ApiService.instance.onUnauthorized = (_) {
       if (_auth.isAuthenticated) _auth.logout();
     };
     _auth.addListener(_onAuthChanged);

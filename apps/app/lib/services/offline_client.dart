@@ -210,21 +210,21 @@ class OfflineClient extends http.BaseClient {
         'data': {'user': _user()}
       });
     }
-    // Mirror the API: self-registration is limited to students and teachers.
-    if (rest.length > 1 && rest[1] == 'register') {
+    // Mirror the API: public sign-up creates student accounts only.
+    final registering = rest.length > 1 && rest[1] == 'register';
+    if (registering) {
       final requested = body['role']?.toString();
-      if (requested != null &&
-          requested != 'student' &&
-          requested != 'teacher') {
+      if (requested != null && requested != 'student') {
         return _Result(400, {
           'error': {
             'code': 'INVALID_BODY',
-            'message': 'Role must be student or teacher',
+            'message': 'Public sign-up creates student accounts; '
+                'teachers are added by an admin',
           },
         });
       }
     }
-    final role = body['role']?.toString() ?? 'admin';
+    final role = registering ? 'student' : body['role']?.toString() ?? 'admin';
     final name = body['display_name']?.toString() ??
         body['displayName']?.toString() ??
         (role == 'admin' ? 'Usman Shahid' : 'Demo $role');

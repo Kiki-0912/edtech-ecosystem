@@ -146,6 +146,23 @@ void main() {
     });
   }
 
+  testWidgets('calendar day cells fit a 320px phone with 1.3x text',
+      (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    for (final role in ['student', 'admin']) {
+      final auth = await signedIn(role);
+      await pumpScreen(tester,
+          screen:
+              KeyedSubtree(key: ValueKey(role), child: const CalendarScreen()),
+          auth: auth,
+          size: const Size(320, 640),
+          dark: false,
+          textScale: 1.3);
+      expect(tester.takeException(), isNull, reason: 'calendar/$role');
+    }
+  });
+
   testWidgets('home shows role-specific content', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);

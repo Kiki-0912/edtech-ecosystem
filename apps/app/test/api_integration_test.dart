@@ -163,6 +163,23 @@ void main() {
     expect(college!.departments, isNotEmpty);
   });
 
+  test('teacher role is rejected on self sign-up', () async {
+    if (!await apiReachable()) {
+      markTestSkipped('API not reachable on localhost:4000');
+      return;
+    }
+    expect(
+      () => api.register(
+        phone: '+1777${DateTime.now().millisecondsSinceEpoch % 100000000}',
+        email: 'teacher-${DateTime.now().millisecondsSinceEpoch}@test.dev',
+        displayName: 'Would-be Teacher',
+        password: 'secret123',
+        role: 'teacher',
+      ),
+      throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 400)),
+    );
+  });
+
   test('admin role is rejected on self sign-up', () async {
     if (!await apiReachable()) {
       markTestSkipped('API not reachable on localhost:4000');

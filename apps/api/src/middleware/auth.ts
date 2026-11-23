@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ApiError } from "../store/db";
-import { getUser } from "../store/db";
-import { verifyToken } from "../routes/auth";
+import { getSessionUser } from "../store/db";
+import { SESSION_REVOKED_MESSAGE, verifyToken } from "../routes/auth";
 
 const fail = (
   reply: FastifyReply,
@@ -28,17 +28,25 @@ export async function authenticate(request: any, reply: FastifyReply) {
     return fail(reply, 401, "UNAUTHORIZED", "Missing or invalid token");
   }
 
-  const userId = verifyToken(token);
-  if (!userId) {
+  const claims = verifyToken(token);
+  if (!claims) {
     return fail(reply, 401, "UNAUTHORIZED", "Invalid or expired token");
   }
 
-  const user = await getUser(userId);
-  if (!user) {
+  const session = await getSessionUser(claims.userId);
+  if (!session) {
     return fail(reply, 401, "UNAUTHORIZED", "User no longer exists");
   }
+  const { user } = session;
+  if (user.isActive === false) {
+    return fail(reply, 401, "ACCOUNT_DISABLED", "This account has been disabled");
+  }
+  // A password reset, deactivation or role change bumps the version.
+  if (session.tokenVersion !== claims.version) {
+    return fail(reply, 401, "SESSION_REVOKED", SESSION_REVOKED_MESSAGE);
+  }
 
-  request.userId = userId;
+  request.userId = user.id;
   request.user = { id: user.id, role: user.role };
 }
 

@@ -389,43 +389,48 @@ class _MonthGrid extends StatelessWidget {
                                   ? Border.all(color: c.accent)
                                   : null,
                             ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  '${day.day}',
-                                  style: context.text.labelLarge?.copyWith(
-                                    color: isSelected
-                                        ? c.onAccent
-                                        : inMonth
-                                            ? c.textPrimary
-                                            : c.textMuted
-                                                .withValues(alpha: 0.5),
-                                    fontWeight: isToday || isSelected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
+                            // Narrow phones with large text: shrink the
+                            // cell's content rather than overflow it.
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${day.day}',
+                                    style: context.text.labelLarge?.copyWith(
+                                      color: isSelected
+                                          ? c.onAccent
+                                          : inMonth
+                                              ? c.textPrimary
+                                              : c.textMuted
+                                                  .withValues(alpha: 0.5),
+                                      fontWeight: isToday || isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(height: 2),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    for (final e in events.take(3))
-                                      Container(
-                                        width: 5,
-                                        height: 5,
-                                        margin: const EdgeInsets.symmetric(
-                                            horizontal: 1),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? c.onAccent
-                                              : c.fg(eventTone(e.kind)),
-                                          shape: BoxShape.circle,
+                                  const SizedBox(height: 2),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      for (final e in events.take(3))
+                                        Container(
+                                          width: 5,
+                                          height: 5,
+                                          margin: const EdgeInsets.symmetric(
+                                              horizontal: 1),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? c.onAccent
+                                                : c.fg(eventTone(e.kind)),
+                                            shape: BoxShape.circle,
+                                          ),
                                         ),
-                                      ),
-                                  ],
-                                ),
-                              ],
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),

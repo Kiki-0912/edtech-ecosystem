@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:edtech_app/config.dart';
+import 'package:edtech_app/models/admin.dart';
 import 'package:edtech_app/models/assignment.dart';
 import 'package:edtech_app/models/attendance.dart';
 import 'package:edtech_app/models/attachment.dart';
@@ -16,10 +17,13 @@ import 'package:http/http.dart' as http;
 
 /// Non-2xx API response. [message] is the API's error message when available.
 class ApiException implements Exception {
-  ApiException(this.statusCode, this.message);
+  ApiException(this.statusCode, this.message, {this.code});
 
   final int statusCode;
   final String message;
+
+  /// The API's `UPPER_SNAKE` error code (e.g. `LAST_ADMIN`), when present.
+  final String? code;
 
   @override
   String toString() => message;
@@ -37,9 +41,15 @@ class ApiService {
   final http.Client _httpClient = http.Client();
   final http.Client _offlineClient = OfflineClient();
 
-  /// Called when an authenticated request returns 401 (expired/invalid
-  /// session). Wired to `AuthProvider.logout` by the app.
-  void Function()? onUnauthorized;
+  /// Called when an authenticated request returns 401 (expired, revoked or
+  /// disabled session) with the API's error. Wired to `AuthProvider.logout`
+  /// by the app.
+  void Function(ApiException error)? onUnauthorized;
+
+  /// When true (the main app), read requests that fail fall back to built-in
+  /// demo data so screens still render offline. The admin console turns it
+  /// off: it must show an error rather than made-up courses or events.
+  bool demoFallback = true;
 
   bool get isOffline => _offlineOverride ?? AppConfig.offlineMode;
 
@@ -47,12 +57,23 @@ class ApiService {
   bool? _offlineOverride;
   set offlineMode(bool? value) => _offlineOverride = value;
 
-  http.Client get _client => (_offlineOverride ?? AppConfig.offlineMode)
-      ? _offlineClient
-      : _httpClient;
+  /// Optional test hook: when set, every request goes through this client
+  /// (e.g. `package:http/testing` `MockClient`) instead of the network or the
+  /// offline fake.
+  http.Client? httpClientOverride;
 
-  Map<String, String> _authHeaders() {
-    final headers = <String, String>{'Content-Type': 'application/json'};
+  http.Client get _client =>
+      httpClientOverride ??
+      ((_offlineOverride ?? AppConfig.offlineMode)
+          ? _offlineClient
+          : _httpClient);
+
+  /// [json] adds `Content-Type: application/json`. Pass false for requests
+  /// without a body (DELETE): Fastify rejects an empty JSON body with 400.
+  Map<String, String> _authHeaders({bool json = true}) {
+    final headers = <String, String>{
+      if (json) 'Content-Type': 'application/json',
+    };
     if (token != null && token!.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
@@ -77,6 +98,7 @@ class ApiService {
           .map((item) => Course.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (_) {
+      if (!demoFallback) rethrow;
       return _demoCourses;
     }
   }
@@ -122,6 +144,7 @@ class ApiService {
           .map((item) => Assignment.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (_) {
+      if (!demoFallback) rethrow;
       return _demoAssignments;
     }
   }
@@ -139,6 +162,7 @@ class ApiService {
       return Assignment.fromJson(
           jsonDecode(response.body)['data'] as Map<String, dynamic>);
     } catch (_) {
+      if (!demoFallback) rethrow;
       return _demoAssignments.first;
     }
   }
@@ -157,6 +181,7 @@ class ApiService {
         jsonDecode(response.body)['data']['roster'] as List<dynamic>,
       );
     } catch (_) {
+      if (!demoFallback) rethrow;
       return [
         {
           'studentId': 'u-student-1',
@@ -272,7 +297,7 @@ class ApiService {
   Future<void> deleteStudent(String studentId) async {
     final response = await _client.delete(
       Uri.parse('${AppConfig.apiBaseUrl}/api/v1/students/$studentId'),
-      headers: _authHeaders(),
+      headers: _authHeaders(json: false),
     );
     _throwOnError(response);
   }
@@ -313,7 +338,7 @@ class ApiService {
       Uri.parse(
         '${AppConfig.apiBaseUrl}/api/v1/students/$studentId/departments/$departmentId',
       ),
-      headers: _authHeaders(),
+      headers: _authHeaders(json: false),
     );
     _throwOnError(response);
   }
@@ -490,7 +515,7 @@ class ApiService {
   Future<void> deleteTeacherNote(String id) async {
     final response = await _client.delete(
       Uri.parse('${AppConfig.apiBaseUrl}/api/v1/notes/$id'),
-      headers: _authHeaders(),
+      headers: _authHeaders(json: false),
     );
     _throwOnError(response);
   }
@@ -560,7 +585,7 @@ class ApiService {
     final response = await _client
         .delete(
           Uri.parse('${AppConfig.apiBaseUrl}/api/v1/departments/$id'),
-          headers: _authHeaders(),
+          headers: _authHeaders(json: false),
         )
         .timeout(const Duration(seconds: 8));
     _throwOnError(response);
@@ -693,6 +718,7 @@ class ApiService {
           .map((item) => CalendarEvent.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (_) {
+      if (!demoFallback) rethrow;
       return _demoCalendar;
     }
   }
@@ -753,7 +779,7 @@ class ApiService {
   Future<void> deleteCalendarEvent(String id) async {
     final response = await _client.delete(
       Uri.parse('${AppConfig.apiBaseUrl}/api/v1/calendar/$id'),
-      headers: _authHeaders(),
+      headers: _authHeaders(json: false),
     );
     _throwOnError(response);
   }
@@ -774,6 +800,7 @@ class ApiService {
           .map((item) => ChatMessage.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (_) {
+      if (!demoFallback) rethrow;
       return [
         ChatMessage(
             id: 'm1',
@@ -825,6 +852,7 @@ class ApiService {
           .map((item) => Channel.fromJson(item as Map<String, dynamic>))
           .toList();
     } catch (_) {
+      if (!demoFallback) rethrow;
       return [
         Channel(
             id: 'ch-general',
@@ -862,12 +890,15 @@ class ApiService {
     return channel.name;
   }
 
+  /// Public sign-up. The API only creates student accounts here; teachers and
+  /// admins are created through the admin console. [role] exists so tests can
+  /// check that the API rejects anything else.
   Future<Map<String, dynamic>> register({
     required String phone,
     required String email,
     required String displayName,
     required String password,
-    required String role,
+    String role = 'student',
   }) async {
     final response = await _client.post(
       Uri.parse('${AppConfig.apiBaseUrl}/api/v1/auth/register'),
@@ -884,15 +915,18 @@ class ApiService {
     return jsonDecode(response.body)['data'] as Map<String, dynamic>;
   }
 
+  /// Signs in with a phone number or an email address (the API accepts either).
   Future<Map<String, dynamic>> login({
-    required String phone,
+    String? phone,
+    String? email,
     required String password,
   }) async {
     final response = await _client.post(
       Uri.parse('${AppConfig.apiBaseUrl}/api/v1/auth/login'),
       headers: _authHeaders(),
       body: jsonEncode(<String, dynamic>{
-        'phone': phone,
+        if (phone != null) 'phone': phone,
+        if (email != null) 'email': email,
         'password': password,
       }),
     );
@@ -946,21 +980,170 @@ class ApiService {
 
   void _throwOnError(http.Response response) {
     if (response.statusCode >= 200 && response.statusCode < 300) return;
-    if (response.statusCode == 401 &&
-        !(response.request?.url.path ?? '').contains('/auth/')) {
-      onUnauthorized?.call();
-    }
-    // Surface the API's `{ error: { message } }` envelope when present.
+    // Surface the API's `{ error: { code, message } }` envelope when present.
     String message = 'Request failed (${response.statusCode})';
+    String? code;
     try {
       final body = jsonDecode(response.body);
       final error = body is Map ? body['error'] : null;
       final apiMessage = error is Map ? error['message'] : null;
+      final apiCode = error is Map ? error['code'] : null;
       if (apiMessage is String && apiMessage.isNotEmpty) message = apiMessage;
+      if (apiCode is String && apiCode.isNotEmpty) code = apiCode;
     } catch (_) {
       // Non-JSON body: keep the generic message.
     }
-    throw ApiException(response.statusCode, message);
+    final error = ApiException(response.statusCode, message, code: code);
+    if (response.statusCode == 401 &&
+        !(response.request?.url.path ?? '').contains('/auth/')) {
+      onUnauthorized?.call(error);
+    }
+    throw error;
+  }
+
+  /* ============================================
+     ADMIN (/api/v1/admin, admin role only)
+     Every method rethrows ApiException: the console must never show demo
+     data in place of the real state.
+     ============================================ */
+
+  Future<Object?> _admin(
+    String method,
+    String path, {
+    Map<String, String>? query,
+    Map<String, dynamic>? body,
+  }) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/api/v1/admin$path')
+        .replace(queryParameters: (query?.isEmpty ?? true) ? null : query);
+    final request = http.Request(method, uri)
+      ..headers.addAll(_authHeaders(json: body != null));
+    if (body != null) request.body = jsonEncode(body);
+    final streamed =
+        await _client.send(request).timeout(const Duration(seconds: 15));
+    final response = await http.Response.fromStream(streamed);
+    _throwOnError(response);
+    return (jsonDecode(response.body) as Map<String, dynamic>)['data'];
+  }
+
+  List<Map<String, dynamic>> _rows(Object? data) =>
+      List<Map<String, dynamic>>.from(data as List<dynamic>);
+
+  /// `status` is `active`, `inactive` or `all`; [query] matches name, email
+  /// or phone.
+  Future<List<AdminUser>> adminListUsers({
+    String? role,
+    String? query,
+    String status = 'all',
+  }) async {
+    final data = await _admin('GET', '/users', query: {
+      if (role != null) 'role': role,
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      'status': status,
+    });
+    return _rows(data).map(AdminUser.fromJson).toList();
+  }
+
+  Future<AdminUser> adminCreateUser({
+    required String displayName,
+    String? email,
+    String? phone,
+    required String role,
+    required String password,
+  }) async {
+    final data = await _admin('POST', '/users', body: {
+      'displayName': displayName,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      'role': role,
+      'password': password,
+    });
+    return AdminUser.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// Only the given fields are sent; `null` means "leave unchanged".
+  Future<AdminUser> adminUpdateUser(
+    String id, {
+    String? displayName,
+    String? email,
+    String? phone,
+    String? role,
+    bool? isActive,
+  }) async {
+    final data = await _admin('PATCH', '/users/$id', body: {
+      if (displayName != null) 'displayName': displayName,
+      if (email != null) 'email': email,
+      if (phone != null) 'phone': phone,
+      if (role != null) 'role': role,
+      if (isActive != null) 'isActive': isActive,
+    });
+    return AdminUser.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> adminResetPassword(String id, String password) async {
+    await _admin('POST', '/users/$id/password', body: {'password': password});
+  }
+
+  Future<void> adminDeleteUser(String id) async {
+    await _admin('DELETE', '/users/$id');
+  }
+
+  Future<List<AdminCourse>> adminListCourses() async {
+    final data = await _admin('GET', '/courses');
+    return _rows(data).map(AdminCourse.fromJson).toList();
+  }
+
+  Future<AdminCourse> adminCreateCourse({
+    required String title,
+    required String code,
+    required String term,
+    required String teacherId,
+  }) async {
+    final data = await _admin('POST', '/courses', body: {
+      'title': title,
+      'code': code,
+      'term': term,
+      'teacherId': teacherId,
+    });
+    return AdminCourse.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<AdminCourse> adminUpdateCourse(
+    String id, {
+    String? title,
+    String? code,
+    String? term,
+    String? teacherId,
+  }) async {
+    final data = await _admin('PATCH', '/courses/$id', body: {
+      if (title != null) 'title': title,
+      if (code != null) 'code': code,
+      if (term != null) 'term': term,
+      if (teacherId != null) 'teacherId': teacherId,
+    });
+    return AdminCourse.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<void> adminDeleteCourse(String id) async {
+    await _admin('DELETE', '/courses/$id');
+  }
+
+  /// Replaces the course roster with exactly [studentIds].
+  Future<AdminCourse> adminSetCourseStudents(
+      String id, List<String> studentIds) async {
+    final data = await _admin('PUT', '/courses/$id/students',
+        body: {'studentIds': studentIds});
+    return AdminCourse.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<List<IntegrityRow>> adminIntegrity({bool flaggedOnly = false}) async {
+    final data = await _admin('GET', '/integrity',
+        query: {'flagged': flaggedOnly ? 'true' : 'false'});
+    return _rows(data).map(IntegrityRow.fromJson).toList();
+  }
+
+  Future<AdminOverview> adminOverview() async {
+    final data = await _admin('GET', '/overview');
+    return AdminOverview.fromJson(data as Map<String, dynamic>);
   }
 
   static final List<Course> _demoCourses = [

@@ -41,7 +41,8 @@
 [[headers]]
   for = "/assets/*"
   [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+    # Flutter asset file names are not content-hashed, so they must revalidate.
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 [[headers]]
   for = "/canvaskit/*"

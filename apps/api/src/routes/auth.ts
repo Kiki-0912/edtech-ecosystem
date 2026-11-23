@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import type { ApiError, User } from "../store/db";
 import {
   createUser,
-  getUser,
+  getSessionUser,
   getUserAuthByPhone,
   getUserAuthByEmail,
   getUserByPhone,
@@ -17,6 +17,13 @@ import { hashPassword, verifyPassword } from "../services/password";
 
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
+// SMS sign-in limits, per phone. With a 6-digit code this bounds an attacker
+// to SMS_MAX_SENDS * SMS_MAX_ATTEMPTS guesses per SMS_SEND_WINDOW_MS.
+const SMS_CODE_TTL_MS = 10 * 60 * 1000; // 10 min
+const SMS_SEND_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const SMS_MAX_SENDS = 5;
+const SMS_MAX_ATTEMPTS = 5;
+
 const fail = (
   reply: FastifyReply,
   statusCode: number,
@@ -26,12 +33,19 @@ const fail = (
 
 export { hashPassword, verifyPassword } from "../services/password";
 
+export const SESSION_REVOKED_MESSAGE = "This session has ended. Sign in again.";
+
 /* ---------- signed bearer tokens (HMAC-SHA256) ---------- */
 
-export function generateToken(userId: string): string {
+/**
+ * `tokenVersion` is the user's current token version: bumping it in the store
+ * (password reset, deactivation, role change) revokes every earlier token.
+ */
+export function generateToken(userId: string, tokenVersion: number): string {
   const issuedAt = Math.floor(Date.now() / 1000);
   const payload = {
     sub: userId,
+    ver: tokenVersion,
     iat: issuedAt,
     exp: issuedAt + TOKEN_TTL_SECONDS,
   };
@@ -43,7 +57,14 @@ export function generateToken(userId: string): string {
   return `${body}.${signature}`;
 }
 
-export function verifyToken(token: string): string | null {
+export interface TokenClaims {
+  userId: string;
+  /** Tokens from before token versions existed count as version 0. */
+  version: number;
+}
+
+/** The claims of a validly signed, unexpired token, or null. */
+export function verifyToken(token: string): TokenClaims | null {
   const separator = token.lastIndexOf(".");
   if (separator <= 0) {
     return null;
@@ -69,7 +90,11 @@ export function verifyToken(token: string): string | null {
     if (payload.exp < Math.floor(Date.now() / 1000)) {
       return null;
     }
-    return payload.sub;
+    const version = payload.ver ?? 0;
+    if (typeof version !== "number") {
+      return null;
+    }
+    return { userId: payload.sub, version };
   } catch {
     return null;
   }
@@ -105,12 +130,13 @@ export async function authRoutes(app: FastifyInstance) {
       );
     }
 
-    if (role !== undefined && role !== "student" && role !== "teacher") {
+    // Staff accounts are created by an admin (POST /api/v1/admin/users).
+    if (role !== undefined && role !== "student") {
       return fail(
         reply,
         400,
         "INVALID_BODY",
-        "Role must be student or teacher",
+        "Public sign-up creates student accounts; teachers are added by an admin",
       );
     }
 
@@ -135,13 +161,13 @@ export async function authRoutes(app: FastifyInstance) {
       displayName: display_name || "New User",
       email: email || "",
       phone: phone || "",
-      role: role || "student",
+      role: "student",
       courseIds: [],
       passwordHash: hashPassword(password),
       isPhoneVerified: 0,
     });
 
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, 0);
 
     return reply.code(201).send({
       data: { user: publicUser(user), token },
@@ -178,12 +204,16 @@ export async function authRoutes(app: FastifyInstance) {
       return fail(reply, 401, "INVALID_CREDENTIALS", "Invalid phone/email or password");
     }
 
-    const user = await getUser(credentials.id);
-    if (!user) {
+    const session = await getSessionUser(credentials.id);
+    if (!session) {
       return fail(reply, 401, "INVALID_CREDENTIALS", "Invalid phone/email or password");
     }
+    const { user } = session;
+    if (user.isActive === false) {
+      return fail(reply, 403, "ACCOUNT_DISABLED", "This account has been disabled");
+    }
 
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, session.tokenVersion);
 
     return {
       data: { user: publicUser(user), token },
@@ -204,16 +234,32 @@ export async function authRoutes(app: FastifyInstance) {
     if (!user) {
       return fail(reply, 404, "USER_NOT_FOUND", "No account is registered for this phone");
     }
+    if (user.role === "admin") {
+      return smsRefusedForAdmin(reply);
+    }
 
     const code = generateSmsCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
-
-    await createSmsCode({
-      id: crypto.randomUUID(),
-      phone,
-      code,
-      expiresAt,
-    });
+    const now = Date.now();
+    const issued = await createSmsCode(
+      {
+        id: crypto.randomUUID(),
+        phone,
+        code,
+        expiresAt: new Date(now + SMS_CODE_TTL_MS).toISOString(),
+      },
+      {
+        windowStart: new Date(now - SMS_SEND_WINDOW_MS).toISOString(),
+        maxPerWindow: SMS_MAX_SENDS,
+      },
+    );
+    if (issued === "rate_limited") {
+      return fail(
+        reply,
+        429,
+        "RATE_LIMITED",
+        "Too many codes were requested for this phone. Try again later.",
+      );
+    }
 
     // A real SMS provider (Twilio/Vonage) would deliver this code. Returning or
     // logging it lets anyone sign in as that phone, so it happens only when a
@@ -242,19 +288,32 @@ export async function authRoutes(app: FastifyInstance) {
       return fail(reply, 400, "INVALID_BODY", "Phone and code are required");
     }
 
-    const valid = await verifySmsCode(phone, code);
+    const found = await getUserByPhone(phone);
+    if (found?.role === "admin") {
+      return smsRefusedForAdmin(reply);
+    }
+
+    const valid = await verifySmsCode(phone, code, SMS_MAX_ATTEMPTS);
     if (!valid) {
       return fail(reply, 400, "INVALID_CODE", "Invalid or expired verification code");
     }
 
-    const user = await getUserByPhone(phone);
-    if (!user) {
+    const session = found && (await getSessionUser(found.id));
+    if (!session) {
       return fail(reply, 404, "USER_NOT_FOUND", "User not found");
+    }
+    const { user } = session;
+    if (user.isActive === false) {
+      return fail(reply, 403, "ACCOUNT_DISABLED", "This account has been disabled");
+    }
+    // The role may have changed since the check above.
+    if (user.role === "admin") {
+      return smsRefusedForAdmin(reply);
     }
 
     await markPhoneVerified(phone);
 
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, session.tokenVersion);
 
     return {
       data: { user: publicUser(user), token },
@@ -269,18 +328,37 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const token = authHeader.substring(7);
-    const userId = verifyToken(token);
-    if (!userId) {
+    const claims = verifyToken(token);
+    if (!claims) {
       return fail(reply, 401, "UNAUTHORIZED", "Invalid or expired token");
     }
 
-    const user = await getUser(userId);
-    if (!user) {
+    const session = await getSessionUser(claims.userId);
+    if (!session) {
       return fail(reply, 404, "USER_NOT_FOUND", "User not found");
+    }
+    const { user } = session;
+    // Same as authenticate(): a disabled account's tokens stop working, and so
+    // does every token issued before the user's token version was bumped.
+    if (user.isActive === false) {
+      return fail(reply, 401, "ACCOUNT_DISABLED", "This account has been disabled");
+    }
+    if (session.tokenVersion !== claims.version) {
+      return fail(reply, 401, "SESSION_REVOKED", SESSION_REVOKED_MESSAGE);
     }
 
     return { data: { user: publicUser(user) } };
   });
+}
+
+/** Admins sign in with their password only: SMS codes are easier to attack. */
+function smsRefusedForAdmin(reply: FastifyReply) {
+  return fail(
+    reply,
+    403,
+    "SMS_SIGN_IN_DISABLED",
+    "SMS sign-in is not available for admin accounts; sign in with your password",
+  );
 }
 
 /** Strip server-only fields before returning a user to a client. */

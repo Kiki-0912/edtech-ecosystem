@@ -84,14 +84,17 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove(_userKey);
   }
 
+  /// Signs in with [phone] or [email] plus [password].
   Future<bool> login({
-    required String phone,
+    String? phone,
+    String? email,
     required String password,
   }) async {
     _setLoading(true);
     _error = null;
     try {
-      final data = await _api.login(phone: phone, password: password);
+      final data =
+          await _api.login(phone: phone, email: email, password: password);
       _user = User.fromJson(data['user'] as Map<String, dynamic>);
       _token = data['token'] as String;
       await _persist();
@@ -105,12 +108,13 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// Public sign-up always creates a student account; teachers and admins are
+  /// added by an admin.
   Future<bool> register({
     required String phone,
     required String email,
     required String displayName,
     required String password,
-    required String role,
   }) async {
     _setLoading(true);
     _error = null;
@@ -120,7 +124,6 @@ class AuthProvider extends ChangeNotifier {
         email: email,
         displayName: displayName,
         password: password,
-        role: role,
       );
       _user = User.fromJson(data['user'] as Map<String, dynamic>);
       _token = data['token'] as String;

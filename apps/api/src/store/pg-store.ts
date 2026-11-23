@@ -37,6 +37,11 @@ type Queryable = Pick<pg.Pool | pg.PoolClient, "query">;
 
 // Arbitrary constant so concurrent cold starts don't migrate at the same time.
 const MIGRATION_LOCK_ID = 727_001;
+// Transaction lock taken by every change that can remove an active admin, so
+// the last-admin check of one sees the others' committed writes.
+const ADMIN_SET_LOCK_ID = 727_002;
+// Lock class for per-phone SMS code issue/verify (second key: hash of the phone).
+const SMS_LOCK_CLASS = 727_003;
 
 function nowISO() {
   return new Date().toISOString();
@@ -273,20 +278,54 @@ export function createPgStore(pool: pg.Pool): Store {
       );
       return toUser(row!);
     },
+    async getSessionUser(userId) {
+      const row = await one("SELECT * FROM users WHERE id = $1", [userId]);
+      return row ? { user: toUser(row), tokenVersion: Number(row.token_version) } : undefined;
+    },
     async updateUser(userId, updates) {
-      const { sql, params } = setClause(
-        {
-          display_name: updates.displayName,
-          email: updates.email,
-          phone: updates.phone,
-          password_hash: updates.passwordHash,
-          is_phone_verified:
-            updates.isPhoneVerified === undefined ? undefined : Boolean(updates.isPhoneVerified),
-        },
-        2,
-      );
-      if (!sql) return;
-      await pool.query(`UPDATE users SET ${sql} WHERE id = $1`, [userId, ...params]);
+      return withTransaction(pool, async (client) => {
+        if (updates.role !== undefined || updates.isActive !== undefined) {
+          await client.query("SELECT pg_advisory_xact_lock($1)", [ADMIN_SET_LOCK_ID]);
+        }
+        const current = (
+          await client.query("SELECT role, is_active FROM users WHERE id = $1 FOR UPDATE", [
+            userId,
+          ])
+        ).rows[0] as Row | undefined;
+        if (!current) return "not_found" as const;
+        const roleChanged = updates.role !== undefined && updates.role !== current.role;
+        const deactivating = updates.isActive === false && current.is_active === true;
+        if (current.role === "admin" && current.is_active && (roleChanged || deactivating)) {
+          const others = await client.query(
+            "SELECT 1 FROM users WHERE role = 'admin' AND is_active AND id <> $1 LIMIT 1",
+            [userId],
+          );
+          if (others.rows.length === 0) return "last_admin" as const;
+        }
+
+        const { sql, params } = setClause(
+          {
+            display_name: updates.displayName,
+            email: updates.email,
+            phone: updates.phone,
+            password_hash: updates.passwordHash,
+            is_phone_verified:
+              updates.isPhoneVerified === undefined ? undefined : Boolean(updates.isPhoneVerified),
+            role: updates.role satisfies Role | undefined,
+            is_active: updates.isActive,
+          },
+          2,
+        );
+        // A new password, a role change or a deactivation revokes existing tokens.
+        const revoke = updates.passwordHash !== undefined || roleChanged || deactivating;
+        const assignments = [sql, revoke ? "token_version = token_version + 1" : ""]
+          .filter(Boolean)
+          .join(", ");
+        if (assignments) {
+          await client.query(`UPDATE users SET ${assignments} WHERE id = $1`, [userId, ...params]);
+        }
+        return "updated" as const;
+      });
     },
 
     // ---------------- Courses ----------------
@@ -610,25 +649,59 @@ export function createPgStore(pool: pg.Pool): Store {
     },
 
     // ---------------- SMS verification ----------------
-    async createSmsCode(input) {
-      await pool.query(
-        `INSERT INTO sms_verification_codes (id, phone, code, expires_at, created_at)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [input.id, input.phone, input.code, input.expiresAt, input.createdAt || nowISO()],
-      );
-      return input;
+    // Issue and verify hold a per-phone transaction lock, so concurrent sends
+    // cannot exceed the limit and concurrent guesses are all counted.
+    async createSmsCode(input, limit) {
+      return withTransaction(pool, async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock($1, hashtext($2))", [
+          SMS_LOCK_CLASS,
+          input.phone,
+        ]);
+        const sent = (
+          await client.query(
+            "SELECT COUNT(*)::int AS n FROM sms_verification_codes WHERE phone = $1 AND created_at > $2",
+            [input.phone, limit.windowStart],
+          )
+        ).rows[0] as { n: number };
+        if (sent.n >= limit.maxPerWindow) return "rate_limited" as const;
+        await client.query(
+          "DELETE FROM sms_verification_codes WHERE phone = $1 AND created_at <= $2",
+          [input.phone, limit.windowStart],
+        );
+        await client.query(
+          `INSERT INTO sms_verification_codes (id, phone, code, expires_at, created_at)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [input.id, input.phone, input.code, input.expiresAt, input.createdAt || nowISO()],
+        );
+        return input;
+      });
     },
-    async verifySmsCode(phone, code) {
-      // Codes are single use: consume the match whether or not it has expired.
-      const row = await one(
-        `DELETE FROM sms_verification_codes
-         WHERE id = (SELECT id FROM sms_verification_codes
-                     WHERE phone = $1 AND code = $2 ORDER BY seq LIMIT 1)
-         RETURNING expires_at`,
-        [phone, code],
-      );
-      if (!row) return false;
-      return new Date(row.expires_at).getTime() > Date.now();
+    async verifySmsCode(phone, code, maxAttempts) {
+      return withTransaction(pool, async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock($1, hashtext($2))", [
+          SMS_LOCK_CLASS,
+          phone,
+        ]);
+        // Only the newest code counts; sending a new one replaces the others.
+        const row = (
+          await client.query(
+            `SELECT id, code, expires_at, attempts FROM sms_verification_codes
+             WHERE phone = $1 ORDER BY seq DESC LIMIT 1`,
+            [phone],
+          )
+        ).rows[0] as Row | undefined;
+        if (!row || row.attempts >= maxAttempts) return false;
+        if (new Date(row.expires_at).getTime() <= Date.now()) return false;
+        if (row.code !== code) {
+          await client.query(
+            "UPDATE sms_verification_codes SET attempts = attempts + 1 WHERE id = $1",
+            [row.id],
+          );
+          return false;
+        }
+        await client.query("DELETE FROM sms_verification_codes WHERE phone = $1", [phone]);
+        return true;
+      });
     },
     async markPhoneVerified(phone) {
       await pool.query("UPDATE users SET is_phone_verified = TRUE WHERE phone = $1", [phone]);
@@ -776,6 +849,238 @@ export function createPgStore(pool: pg.Pool): Store {
         [courseId],
       );
       return rows.map(toUser);
+    },
+
+    // ---------------- Admin console ----------------
+    // The in-memory store mirrors these, including the foreign-key cascades.
+    async deleteUser(userId) {
+      return withTransaction(pool, async (client) => {
+        await client.query("SELECT pg_advisory_xact_lock($1)", [ADMIN_SET_LOCK_ID]);
+        const user = (
+          await client.query("SELECT phone, role, is_active FROM users WHERE id = $1 FOR UPDATE", [
+            userId,
+          ])
+        ).rows[0] as Row | undefined;
+        if (!user) return "not_found" as const;
+        if (user.role === "admin" && user.is_active) {
+          const others = await client.query(
+            "SELECT 1 FROM users WHERE role = 'admin' AND is_active AND id <> $1 LIMIT 1",
+            [userId],
+          );
+          if (others.rows.length === 0) return "last_admin" as const;
+        }
+        // courses.teacher_id and teacher_notes.author_id have no ON DELETE action.
+        const inUse = await client.query(
+          `SELECT 1 FROM courses WHERE teacher_id = $1
+           UNION ALL SELECT 1 FROM teacher_notes WHERE author_id = $1 LIMIT 1`,
+          [userId],
+        );
+        if (inUse.rows.length > 0) return "in_use" as const;
+
+        await client.query(
+          "UPDATE courses SET student_ids = student_ids - $1::text WHERE student_ids ? $1",
+          [userId],
+        );
+        await client.query(
+          "UPDATE chat_channels SET member_ids = member_ids - $1::text WHERE member_ids ? $1",
+          [userId],
+        );
+        await client.query("DELETE FROM chat_messages WHERE author_id = $1", [userId]);
+        await client.query("DELETE FROM effort_scores WHERE student_id = $1", [userId]);
+        await client.query("DELETE FROM integrity_flags WHERE student_id = $1", [userId]);
+        if (user.phone) {
+          await client.query("DELETE FROM sms_verification_codes WHERE phone = $1", [user.phone]);
+        }
+        // Submissions, attendance, telemetry batches and department enrollments
+        // go with the user (ON DELETE CASCADE).
+        await client.query("DELETE FROM users WHERE id = $1", [userId]);
+        return "deleted" as const;
+      });
+    },
+    async createCourse(input) {
+      return withTransaction(pool, async (client) => {
+        const row = (
+          await client.query(
+            `INSERT INTO courses (id, title, code, teacher_id, student_ids, term, created_at)
+             VALUES ($1, $2, $3, $4, '[]', $5, $6) RETURNING *`,
+            [randomUUID(), input.title, input.code, input.teacherId, input.term, nowISO()],
+          )
+        ).rows[0] as Row;
+        await client.query(
+          `UPDATE users SET course_ids = course_ids || to_jsonb($2::text)
+           WHERE id = $1 AND NOT course_ids ? $2`,
+          [input.teacherId, row.id],
+        );
+        return toCourse(row);
+      });
+    },
+    async updateCourse(courseId, updates) {
+      return withTransaction(pool, async (client) => {
+        const current = (
+          await client.query("SELECT teacher_id FROM courses WHERE id = $1 FOR UPDATE", [courseId])
+        ).rows[0] as Row | undefined;
+        if (!current) return undefined;
+        const { sql, params } = setClause(
+          {
+            title: updates.title,
+            code: updates.code,
+            term: updates.term,
+            teacher_id: updates.teacherId,
+          },
+          2,
+        );
+        const row = (
+          await client.query(
+            sql
+              ? `UPDATE courses SET ${sql} WHERE id = $1 RETURNING *`
+              : "SELECT * FROM courses WHERE id = $1",
+            [courseId, ...params],
+          )
+        ).rows[0] as Row;
+
+        const previous: string = current.teacher_id;
+        const next = updates.teacherId;
+        if (next !== undefined && next !== previous) {
+          await client.query("UPDATE users SET course_ids = course_ids - $2::text WHERE id = $1", [
+            previous,
+            courseId,
+          ]);
+          await client.query(
+            `UPDATE users SET course_ids = course_ids || to_jsonb($2::text)
+             WHERE id = $1 AND NOT course_ids ? $2`,
+            [next, courseId],
+          );
+          await client.query(
+            `UPDATE chat_channels SET member_ids = CASE
+               WHEN (member_ids - $2::text) ? $3 THEN member_ids - $2::text
+               ELSE (member_ids - $2::text) || to_jsonb($3::text)
+             END
+             WHERE course_id = $1`,
+            [courseId, previous, next],
+          );
+        }
+        return toCourse(row);
+      });
+    },
+    async deleteCourse(courseId) {
+      return withTransaction(pool, async (client) => {
+        // No foreign keys on these two; everything else below cascades from courses.
+        for (const table of ["effort_scores", "integrity_flags"]) {
+          await client.query(
+            `DELETE FROM ${table}
+             WHERE assignment_id IN (SELECT id FROM assignments WHERE course_id = $1)`,
+            [courseId],
+          );
+        }
+        await client.query(
+          "UPDATE users SET course_ids = course_ids - $1::text WHERE course_ids ? $1",
+          [courseId],
+        );
+        // Cascades: assignments (submissions, telemetry batches), calendar events,
+        // chat channels (messages), attendance and teacher notes.
+        const result = await client.query("DELETE FROM courses WHERE id = $1", [courseId]);
+        return (result.rowCount ?? 0) > 0;
+      });
+    },
+    async setCourseStudents(courseId, studentIds) {
+      return withTransaction(pool, async (client) => {
+        const current = (
+          await client.query("SELECT student_ids FROM courses WHERE id = $1 FOR UPDATE", [
+            courseId,
+          ])
+        ).rows[0] as Row | undefined;
+        if (!current) return undefined;
+        const previous = current.student_ids as string[];
+        const next = [...new Set(studentIds)];
+        const added = next.filter((id) => !previous.includes(id));
+        const removed = previous.filter((id) => !next.includes(id));
+
+        const row = (
+          await client.query("UPDATE courses SET student_ids = $2::jsonb WHERE id = $1 RETURNING *", [
+            courseId,
+            JSON.stringify(next),
+          ])
+        ).rows[0] as Row;
+        await client.query(
+          `UPDATE users SET course_ids = course_ids || to_jsonb($1::text)
+           WHERE id = ANY($2::text[]) AND NOT course_ids ? $1`,
+          [courseId, next],
+        );
+        await client.query(
+          `UPDATE users SET course_ids = course_ids - $1::text
+           WHERE role = 'student' AND course_ids ? $1 AND NOT (id = ANY($2::text[]))`,
+          [courseId, next],
+        );
+        await client.query(
+          "UPDATE chat_channels SET member_ids = member_ids - $2::text[] WHERE course_id = $1",
+          [courseId, removed],
+        );
+        for (const id of added) {
+          await client.query(
+            `UPDATE chat_channels SET member_ids = member_ids || to_jsonb($2::text)
+             WHERE course_id = $1 AND NOT member_ids ? $2`,
+            [courseId, id],
+          );
+        }
+        return toCourse(row);
+      });
+    },
+    async getIntegrityRows() {
+      // First recorded session per student + assignment, like getEffortScore.
+      const rows = await many(
+        `SELECT DISTINCT ON (e.student_id, e.assignment_id)
+                e.student_id, u.display_name AS student_name, e.assignment_id,
+                a.title AS assignment_title, a.course_id, c.title AS course_title,
+                e.score, e.computed_at, COALESCE(f.flags, '[]'::jsonb) AS flags
+         FROM effort_scores e
+         JOIN users u ON u.id = e.student_id
+         JOIN assignments a ON a.id = e.assignment_id
+         JOIN courses c ON c.id = a.course_id
+         LEFT JOIN integrity_flags f
+           ON f.student_id = e.student_id AND f.assignment_id = e.assignment_id
+         ORDER BY e.student_id, e.assignment_id, e.seq`,
+      );
+      return rows.map((row) => ({
+        studentId: row.student_id,
+        studentName: row.student_name,
+        assignmentId: row.assignment_id,
+        assignmentTitle: row.assignment_title,
+        courseId: row.course_id,
+        courseTitle: row.course_title,
+        score: row.score,
+        flags: [...row.flags] as IntegrityFlag[],
+        computedAt: row.computed_at,
+      }));
+    },
+    async getEntityCounts() {
+      const row = (await one(
+        `SELECT
+           (SELECT COUNT(*) FROM users WHERE role = 'student') AS students,
+           (SELECT COUNT(*) FROM users WHERE role = 'teacher') AS teachers,
+           (SELECT COUNT(*) FROM users WHERE role = 'admin') AS admins,
+           (SELECT COUNT(*) FROM users WHERE NOT is_active) AS inactive_users,
+           (SELECT COUNT(*) FROM courses) AS courses,
+           (SELECT COUNT(*) FROM departments) AS departments,
+           (SELECT COUNT(*) FROM assignments) AS assignments,
+           (SELECT COUNT(*) FROM submissions) AS submissions,
+           (SELECT COUNT(*) FROM telemetry_batches) AS telemetry_batches`,
+      ))!;
+      // COUNT(*) is a bigint, which `pg` returns as a string.
+      return {
+        students: Number(row.students),
+        teachers: Number(row.teachers),
+        admins: Number(row.admins),
+        inactiveUsers: Number(row.inactive_users),
+        courses: Number(row.courses),
+        departments: Number(row.departments),
+        assignments: Number(row.assignments),
+        submissions: Number(row.submissions),
+        telemetryBatches: Number(row.telemetry_batches),
+      };
+    },
+    async getSchemaVersion() {
+      const row = await one("SELECT MAX(version) AS version FROM schema_migrations");
+      return row?.version ?? null;
     },
   };
   return store;

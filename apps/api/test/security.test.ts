@@ -137,6 +137,67 @@ describe("role guards", () => {
     });
   }
 
+  test("students list only classmates' names; staff get full records", async () => {
+    // u-student-4 is enrolled in c-001 with u-student-1 (memory.ts seed).
+    const classmates = await app.inject({
+      method: "GET",
+      url: "/api/v1/students",
+      headers: auth("student"),
+    });
+    assert.equal(classmates.statusCode, 200, classmates.body);
+    const rows: Record<string, unknown>[] = classmates.json().data;
+    assert.ok(rows.some((row) => row.id === "u-student-1"));
+    assert.ok(rows.some((row) => row.id === "u-student-4"));
+    for (const row of rows) {
+      assert.deepEqual(Object.keys(row).sort(), ["displayName", "id", "role"]);
+    }
+
+    for (const who of ["teacher", "admin"]) {
+      const staff = await app.inject({ method: "GET", url: "/api/v1/students", headers: auth(who) });
+      assert.equal(staff.statusCode, 200, staff.body);
+      assert.ok(staff.json().data.every((row: { phone?: string }) => "phone" in row), who);
+    }
+
+    // A student who shares no course with anyone sees only themself.
+    const loner = await app.inject({
+      method: "POST",
+      url: "/api/v1/auth/register",
+      payload: { email: "loner@example.edu", password: "loner-pass", display_name: "Loner" },
+    });
+    assert.equal(loner.statusCode, 201, loner.body);
+    const own = await app.inject({
+      method: "GET",
+      url: "/api/v1/students",
+      headers: { authorization: `Bearer ${loner.json().data.token}` },
+    });
+    assert.deepEqual(
+      own.json().data.map((row: { id: string }) => row.id),
+      [loner.json().data.user.id],
+    );
+  });
+
+  test("students can read only their own student record", async () => {
+    const other = await app.inject({
+      method: "GET",
+      url: "/api/v1/students/u-student-4",
+      headers: auth("student"),
+    });
+    assert.equal(other.statusCode, 403, other.body);
+    assert.equal(other.json().error.code, "FORBIDDEN");
+    const own = await app.inject({
+      method: "GET",
+      url: "/api/v1/students/u-student-1",
+      headers: auth("student"),
+    });
+    assert.equal(own.statusCode, 200, own.body);
+    const staff = await app.inject({
+      method: "GET",
+      url: "/api/v1/students/u-student-4",
+      headers: auth("teacher"),
+    });
+    assert.equal(staff.statusCode, 200, staff.body);
+  });
+
   test("teachers can mark attendance", async () => {
     const res = await app.inject({
       method: "POST",

@@ -18,8 +18,16 @@ export interface User {
   courseIds: string[];
   passwordHash?: string;
   isPhoneVerified?: boolean;
+  /** False once an admin disables the account (sign-in and tokens are refused). */
+  isActive?: boolean;
   createdAt: string;
 }
+
+/**
+ * What GET /students returns to a student caller: their classmates (students
+ * sharing a course, plus themself), without contact details. Staff get `User`s.
+ */
+export type StudentSummary = Pick<User, "id" | "displayName" | "role">;
 
 export interface Course {
   id: string;
@@ -246,4 +254,96 @@ export interface StudentImportRow {
 export interface StudentImportResult {
   imported: number;
   errors: { row: number; message: string }[];
+}
+
+/* ============================================
+   Admin console (/api/v1/admin/*, admin role only)
+   ============================================ */
+
+/** A user as the admin console sees it. Never includes the password hash. */
+export interface AdminUser {
+  id: string;
+  displayName: string;
+  email: string;
+  phone: string;
+  role: Role;
+  isActive: boolean;
+  isPhoneVerified: boolean;
+  courseIds: string[];
+  createdAt: string;
+}
+
+/** Body of POST /admin/users. One of email or phone is required. */
+export interface AdminUserCreate {
+  displayName: string;
+  email?: string;
+  phone?: string;
+  role: Role;
+  /** At least 8 characters. */
+  password: string;
+}
+
+/** Body of PATCH /admin/users/:id. Every field is optional. */
+export interface AdminUserUpdate {
+  displayName?: string;
+  email?: string;
+  phone?: string;
+  role?: Role;
+  isActive?: boolean;
+}
+
+export interface AdminCourse {
+  id: string;
+  title: string;
+  code: string;
+  term: string;
+  teacherId: string;
+  teacherName: string;
+  studentIds: string[];
+  studentCount: number;
+  assignmentCount: number;
+  createdAt: string;
+}
+
+/** Body of POST /admin/courses; PATCH /admin/courses/:id takes any subset. */
+export interface AdminCourseCreate {
+  title: string;
+  code: string;
+  term: string;
+  teacherId: string;
+}
+
+/** One row per student + assignment that has an effort score. */
+export interface IntegrityRow {
+  studentId: string;
+  studentName: string;
+  assignmentId: string;
+  assignmentTitle: string;
+  courseId: string;
+  courseTitle: string;
+  score: number;
+  flags: IntegrityFlag[];
+  computedAt: string;
+}
+
+/** GET /admin/overview. */
+export interface Overview {
+  counts: {
+    students: number;
+    teachers: number;
+    admins: number;
+    inactiveUsers: number;
+    courses: number;
+    departments: number;
+    assignments: number;
+    submissions: number;
+    telemetryBatches: number;
+    /** Rows of GET /admin/integrity?flagged=true. */
+    flaggedReports: number;
+  };
+  storage: "memory" | "postgres";
+  database: "ok" | "unreachable";
+  schemaVersion: number | null;
+  version: string;
+  serverTime: string;
 }
