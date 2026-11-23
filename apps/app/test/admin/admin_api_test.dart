@@ -218,19 +218,10 @@ void main() {
     });
   });
 
-  group('demo fallback', () {
-    tearDown(() => api.demoFallback = true);
-
-    test('the main app falls back to demo courses and events', () async {
-      respond(500, {
-        'error': {'code': 'INTERNAL_ERROR', 'message': 'boom'}
-      });
-      expect(await api.getCourses(), isNotEmpty);
-      expect(await api.getCalendar(null), isNotEmpty);
-    });
-
-    test('with demoFallback off, failures reach the screen', () async {
-      api.demoFallback = false;
+  group('read failures', () {
+    // There is no demo fallback any more: the main app and the admin console
+    // both show the API's error instead of invented data.
+    test('reach the caller as ApiException', () async {
       respond(500, {
         'error': {'code': 'INTERNAL_ERROR', 'message': 'boom'}
       });
@@ -239,8 +230,11 @@ void main() {
       await expectLater(api.getCourses(), failed);
       await expectLater(api.getCalendar('u-admin-1'), failed);
       await expectLater(api.getAssignments('c-1'), failed);
+      await expectLater(api.getAssignment('a-1'), failed);
+      await expectLater(api.getRoster('a-1'), failed);
       await expectLater(api.getChannels('c-1'), failed);
       await expectLater(api.getMessages('ch-1'), failed);
+      await expectLater(api.getCollege(), failed);
     });
   });
 

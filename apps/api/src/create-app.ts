@@ -2,7 +2,7 @@ import cors from "@fastify/cors";
 import Fastify from "fastify";
 import type { FastifyError } from "fastify";
 import { authenticate } from "./middleware/auth";
-import { config } from "./config";
+import { assertSafeConfig, config } from "./config";
 import { closeDb, initDb, pingDb, storeKind } from "./store/db";
 
 interface ApiError {
@@ -38,12 +38,16 @@ const POSTGRES_CONSTRAINT_ERRORS: Record<
 };
 
 export async function buildApp() {
+  assertSafeConfig();
   await initDb();
 
   const app = Fastify({
     logger: {
       level: config.env === "production" ? "info" : "debug",
     },
+    // Body schemas reject the wrong type (e.g. a number for a name) instead of
+    // silently coercing it to a string.
+    ajv: { customOptions: { coerceTypes: false } },
   });
 
   app.addHook("onClose", async () => {
@@ -97,6 +101,17 @@ export async function buildApp() {
     if (constraint && !error.statusCode) {
       return reply.code(constraint.status).send({
         error: { code: constraint.code, message: constraint.message },
+      } satisfies ApiError);
+    }
+
+    // Schema failures and unparseable JSON bodies are the client's fault.
+    if (
+      error.validation ||
+      error.code === "FST_ERR_CTP_EMPTY_JSON_BODY" ||
+      error.code === "FST_ERR_CTP_INVALID_JSON_BODY"
+    ) {
+      return reply.code(400).send({
+        error: { code: "INVALID_BODY", message: error.message },
       } satisfies ApiError);
     }
 

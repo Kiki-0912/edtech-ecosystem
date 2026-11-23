@@ -1,3 +1,5 @@
+import 'package:edtech_app/formats.dart';
+
 class CalendarEvent {
   const CalendarEvent({
     required this.id,
@@ -24,11 +26,8 @@ class CalendarEvent {
       departmentId: json['departmentId'] as String?,
       title: json['title'] as String,
       kind: json['kind'] as String,
-      startsAt: DateTime.tryParse(json['startsAt'] as String? ?? '') ??
-          DateTime.now(),
-      endsAt: json['endsAt'] == null
-          ? null
-          : DateTime.tryParse(json['endsAt'] as String),
+      startsAt: parseServerTime(json['startsAt']) ?? DateTime.now(),
+      endsAt: parseServerTime(json['endsAt']),
     );
   }
 
@@ -39,8 +38,8 @@ class CalendarEvent {
       'departmentId': departmentId,
       'title': title,
       'kind': kind,
-      'startsAt': startsAt.toIso8601String(),
-      'endsAt': endsAt?.toIso8601String(),
+      'startsAt': startsAt.toUtc().toIso8601String(),
+      'endsAt': endsAt?.toUtc().toIso8601String(),
     };
   }
 }

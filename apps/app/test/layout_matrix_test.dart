@@ -1,6 +1,9 @@
 import 'dart:convert';
 
 import 'package:edtech_app/auth/auth_provider.dart';
+import 'package:edtech_app/auth/login_screen.dart';
+import 'package:edtech_app/auth/signup_screen.dart';
+import 'package:edtech_app/auth/verify_sms_screen.dart';
 import 'package:edtech_app/screens/attendance/attendance_mark_screen.dart';
 import 'package:edtech_app/screens/attendance/attendance_screen.dart';
 import 'package:edtech_app/screens/calendar/calendar_screen.dart';
@@ -40,6 +43,10 @@ final Map<String, Widget Function()> screens = {
   'students': () => const StudentsScreen(),
   'departments': () => const DepartmentsScreen(),
   'notes': () => const NotesScreen(),
+  // Sign-in pages render the same for every role (nobody is signed in yet).
+  'login': () => const LoginScreen(),
+  'signup': () => const SignupScreen(),
+  'verify-sms': () => const VerifySmsScreen(),
 };
 
 const sizes = <String, Size>{

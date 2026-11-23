@@ -76,7 +76,7 @@ describe("postgres store", () => {
       const { rows } = await pool.query("SELECT version FROM schema_migrations");
       assert.deepEqual(
         rows.map((row) => row.version).sort(),
-        [1, 2, 3],
+        [1, 2, 3, 4],
       );
     } finally {
       await pool.end();
@@ -196,7 +196,8 @@ describe("postgres store", () => {
     const res = await app.inject({
       method: "POST",
       url: "/api/v1/attendance",
-      headers: await login(app, TEACHER),
+      // An admin may mark any course, so the store's foreign key is what answers.
+      headers: await login(app, ADMIN),
       payload: { courseId: "no-such-course", studentId: "u-student-1", date: "2026-10-11", status: "present" },
     });
     assert.equal(res.statusCode, 400);
@@ -280,5 +281,30 @@ describe("postgres store", () => {
     assert.equal(report.statusCode, 200, report.body);
     assert.equal(report.json().data.replayAvailable, true);
     assert.equal(report.json().data.effortScore.sessionId, "s-pg-1");
+  });
+
+  test("scoped batch lookups read one pair or one batch id, not the whole table", async () => {
+    const { createPgStore, createPool } = await import("../src/store/pg-store");
+    const pool = createPool(process.env.DATABASE_URL!);
+    try {
+      const store = createPgStore(pool);
+      const base = {
+        events: [],
+        clientSignature: "sig",
+        clientPublicKey: "{}",
+        createdAt: new Date().toISOString(),
+      };
+      const mine = { ...base, batchId: `b-${crypto.randomUUID()}`, studentId: "u-student-1", assignmentId: "a-002" };
+      const other = { ...base, batchId: `b-${crypto.randomUUID()}`, studentId: "u-student-2", assignmentId: "a-002" };
+      await store.createTelemetryBatch(mine);
+      await store.createTelemetryBatch(other);
+
+      const pair = await store.getTelemetryBatchesFor("u-student-1", "a-002");
+      assert.deepEqual(pair.map((b) => b.batchId), [mine.batchId]);
+      assert.equal((await store.getTelemetryBatch(other.batchId))?.studentId, "u-student-2");
+      assert.equal(await store.getTelemetryBatch("no-such-batch"), undefined);
+    } finally {
+      await pool.end();
+    }
   });
 });

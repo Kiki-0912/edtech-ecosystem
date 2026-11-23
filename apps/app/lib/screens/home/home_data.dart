@@ -85,7 +85,7 @@ class HomeData {
     final results = await Future.wait([
       api.getCourses(),
       api.getCalendar(user.id),
-      api.getAttendanceRecords().catchError((_) => <AttendanceRecord>[]),
+      api.getAttendanceRecords(),
     ]);
     final allCourses = results[0] as List<Course>;
     final events = (results[1] as List<CalendarEvent>)
@@ -96,8 +96,8 @@ class HomeData {
 
     if (user.isAdmin) {
       final counts = await Future.wait([
-        api.getStudents().then((s) => s.length).catchError((_) => 0),
-        api.getDepartments().then((d) => d.length).catchError((_) => 0),
+        api.getStudents().then((s) => s.length),
+        api.getDepartments().then((d) => d.length),
       ]);
       return HomeData(
         courses: allCourses,
@@ -116,7 +116,9 @@ class HomeData {
             .where((r) => courses.any((c) => c.id == r.courseId))
             .toList(),
         studentCount: courses.fold(0, (sum, c) => sum + c.studentCount),
-        progress: await _progressFor(courses),
+        // Rosters are visible to the course's own teacher only.
+        progress: await _progressFor(
+            courses.where((c) => c.teacherId == user.id).toList()),
       );
     }
 
@@ -131,16 +133,16 @@ class HomeData {
       List<Course> courses) async {
     final api = ApiService.instance;
     final out = <AssignmentProgress>[];
-    final perCourse = await Future.wait(courses.map(
-        (c) => api.getAssignments(c.id).catchError((_) => <Assignment>[])));
+    final perCourse =
+        await Future.wait(courses.map((c) => api.getAssignments(c.id)));
     final open = <(Assignment, Course)>[
       for (var i = 0; i < courses.length; i++)
         for (final a in perCourse[i])
           if (a.isOpen) (a, courses[i]),
     ]..sort((x, y) => x.$1.dueAt.compareTo(y.$1.dueAt));
 
-    final rosters = await Future.wait(open.take(5).map((pair) =>
-        api.getRoster(pair.$1.id).catchError((_) => <Map<String, dynamic>>[])));
+    final rosters = await Future.wait(
+        open.take(5).map((pair) => api.getRoster(pair.$1.id)));
     for (var i = 0; i < rosters.length; i++) {
       final roster = rosters[i];
       out.add(AssignmentProgress(

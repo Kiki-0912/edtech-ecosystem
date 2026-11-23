@@ -6,6 +6,20 @@ import {
   deleteTeacherNote,
 } from '../store/db.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
+import { TEXT, bodySchema, rejectInvalidBody } from '../middleware/validation.js';
+
+const NOTE_PROPERTIES = {
+  bookName: TEXT,
+  courseCode: TEXT,
+  title: TEXT,
+  content: { type: 'string' },
+};
+const CREATE_NOTE_SCHEMA = {
+  type: 'object',
+  required: ['courseId', 'bookName', 'courseCode', 'title'],
+  properties: { courseId: TEXT, ...NOTE_PROPERTIES },
+};
+const UPDATE_NOTE_SCHEMA = { type: 'object', properties: NOTE_PROPERTIES };
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
 
@@ -39,23 +53,25 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/notes - create a note (teacher/admin only)
   fastify.post(
     '/notes',
-    { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
+    { preHandler: [authenticate, requireRoles('admin', 'teacher')], ...bodySchema(CREATE_NOTE_SCHEMA) },
     async (request, reply) => {
+      if (rejectInvalidBody(request, reply)) return reply;
       const req = request as AuthRequest;
       const caller = req.user;
+      // An unknown courseId is rejected by the store (400 INVALID_REFERENCE).
       const body = request.body as {
         courseId: string;
         bookName: string;
         courseCode: string;
         title: string;
-        content: string;
+        content?: string;
       };
       const note = await upsertTeacherNote({
         courseId: body.courseId,
         bookName: body.bookName,
         courseCode: body.courseCode,
         title: body.title,
-        content: body.content,
+        content: body.content ?? '',
         authorId: caller?.id ?? 'system',
       });
       return reply.code(201).send({ data: note });
@@ -65,7 +81,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
   // PUT /api/v1/notes/:id - update a note (author or admin)
   fastify.put(
     '/notes/:id',
-    { preHandler: [authenticate] },
+    { preHandler: [authenticate], ...bodySchema(UPDATE_NOTE_SCHEMA) },
     async (request, reply) => {
       const req = request as AuthRequest;
       const caller = req.user;
@@ -76,6 +92,7 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
       if (caller?.role !== 'admin' && note.authorId !== caller?.id) {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Not the author' } });
       }
+      if (rejectInvalidBody(request, reply)) return reply;
       const body = request.body as Partial<{
         bookName: string;
         courseCode: string;

@@ -1,3 +1,5 @@
+import 'package:edtech_app/formats.dart';
+
 class User {
   const User({
     required this.id,
@@ -27,9 +29,11 @@ class User {
       phone: json['phone'] as String? ?? '',
       role: json['role'] as String,
       courseIds: List<String>.from(json['courseIds'] as List<dynamic>),
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
-      isPhoneVerified: json['is_phone_verified'] as bool? ?? false,
+      createdAt: parseServerTime(json['createdAt']) ?? DateTime.now(),
+      // The API sends camelCase; older offline builds sent snake_case.
+      isPhoneVerified:
+          (json['isPhoneVerified'] ?? json['is_phone_verified']) as bool? ??
+              false,
     );
   }
 
@@ -42,7 +46,7 @@ class User {
       'role': role,
       'courseIds': courseIds,
       'isPhoneVerified': isPhoneVerified,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
     };
   }
 

@@ -1,3 +1,4 @@
+import 'package:edtech_app/formats.dart';
 import 'effort_score.dart';
 
 class IntegrityReport {
@@ -28,8 +29,7 @@ class IntegrityReport {
           EffortScore.fromJson(json['effortScore'] as Map<String, dynamic>),
       flags: List<String>.from(json['flags'] as List<dynamic>),
       replayAvailable: json['replayAvailable'] as bool,
-      generatedAt: DateTime.tryParse(json['generatedAt'] as String? ?? '') ??
-          DateTime.now(),
+      generatedAt: parseServerTime(json['generatedAt']) ?? DateTime.now(),
     );
   }
 
@@ -41,7 +41,7 @@ class IntegrityReport {
       'effortScore': effortScore.toJson(),
       'flags': flags,
       'replayAvailable': replayAvailable,
-      'generatedAt': generatedAt.toIso8601String(),
+      'generatedAt': generatedAt.toUtc().toIso8601String(),
     };
   }
 }

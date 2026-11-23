@@ -530,6 +530,10 @@ export function createPgStore(pool: pg.Pool): Store {
         : await one("SELECT * FROM calendar_events WHERE id = $1", [eventId]);
       return row ? toCalendarEvent(row) : undefined;
     },
+    async getCalendarEvent(eventId) {
+      const row = await one("SELECT * FROM calendar_events WHERE id = $1", [eventId]);
+      return row ? toCalendarEvent(row) : undefined;
+    },
     async deleteCalendarEvent(eventId) {
       const result = await pool.query("DELETE FROM calendar_events WHERE id = $1", [eventId]);
       return (result.rowCount ?? 0) > 0;
@@ -566,6 +570,20 @@ export function createPgStore(pool: pg.Pool): Store {
     // ---------------- Telemetry, effort and integrity ----------------
     async getTelemetryBatches() {
       return (await many("SELECT * FROM telemetry_batches ORDER BY seq")).map(toTelemetryBatch);
+    },
+    async getTelemetryBatch(batchId) {
+      const row = await one("SELECT * FROM telemetry_batches WHERE batch_id = $1", [batchId]);
+      return row ? toTelemetryBatch(row) : undefined;
+    },
+    async getTelemetryBatchesFor(studentId, assignmentId) {
+      // Uses idx_telemetry_student_assignment instead of reading every batch.
+      return (
+        await many(
+          `SELECT * FROM telemetry_batches WHERE student_id = $1 AND assignment_id = $2
+           ORDER BY seq`,
+          [studentId, assignmentId],
+        )
+      ).map(toTelemetryBatch);
     },
     async hasTelemetryBatch(studentId, assignmentId) {
       const row = await one(

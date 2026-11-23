@@ -467,6 +467,7 @@ class OfflineStore {
     required String phone,
     String? courseId,
     String? departmentId,
+    String enrolledBy = 'u-admin-1',
   }) async {
     await _ensureLoaded();
     final id = _id('u');
@@ -489,7 +490,7 @@ class OfflineStore {
         'studentId': id,
         'departmentId': departmentId,
         'enrolledAt': DateTime.now().toIso8601String(),
-        'enrolledBy': 'u-admin-1',
+        'enrolledBy': enrolledBy,
       });
     }
     await _persistAll();
@@ -610,19 +611,25 @@ class OfflineStore {
         .toList();
   }
 
+  /// Adds [studentId] to [departmentId], keeping any other departments, like
+  /// the API. Enrolling twice returns the existing enrolment.
   Future<Map<String, dynamic>> enrollStudentInDepartment({
     required String studentId,
     required String departmentId,
+    String enrolledBy = 'u-admin-1',
   }) async {
     await _ensureLoaded();
-    // This screen models enrollment as a move: remove previous departments.
-    _enrollments.removeWhere((e) => e['studentId'] == studentId);
+    final existing = _enrollments
+        .where((e) =>
+            e['studentId'] == studentId && e['departmentId'] == departmentId)
+        .firstOrNull;
+    if (existing != null) return Map<String, dynamic>.from(existing);
     final enrollment = <String, dynamic>{
       'id': _id('enr'),
       'studentId': studentId,
       'departmentId': departmentId,
       'enrolledAt': DateTime.now().toIso8601String(),
-      'enrolledBy': 'u-admin-1',
+      'enrolledBy': enrolledBy,
     };
     _enrollments.add(enrollment);
     await _persistAll();
@@ -718,6 +725,7 @@ class OfflineStore {
     required String courseId,
     required String date,
     required List<Map<String, dynamic>> records,
+    String markedBy = 'u-teacher-1',
   }) async {
     final results = <Map<String, dynamic>>[];
     for (final record in records) {
@@ -727,6 +735,7 @@ class OfflineStore {
         date: date,
         status: record['status']?.toString() ?? 'absent',
         notes: record['notes']?.toString() ?? '',
+        markedBy: markedBy,
       ));
     }
     return results;
@@ -789,6 +798,7 @@ class OfflineStore {
     required String courseCode,
     required String title,
     required String content,
+    String authorId = 'u-teacher-1',
   }) async {
     await _ensureLoaded();
     final now = DateTime.now().toIso8601String();
@@ -799,7 +809,7 @@ class OfflineStore {
       'courseCode': courseCode,
       'title': title,
       'content': content,
-      'authorId': 'u-teacher-1',
+      'authorId': authorId,
       'createdAt': now,
       'updatedAt': now,
     };
@@ -840,14 +850,26 @@ class OfflineStore {
      CALENDAR
      ============================================ */
 
+  /// Events visible for [courseIds], like the API's `getCalendarEvents`:
+  /// course-less events plus those of the given courses. With
+  /// [departmentId], events of that department or of none (any course).
+  /// `null` [courseIds] means every course.
   Future<List<Map<String, dynamic>>> getCalendarEvents({
+    Set<String>? courseIds,
     String? departmentId,
     String? courseId,
   }) async {
     await _ensureLoaded();
     final rows = _calendar
         .where((e) {
-          if (departmentId != null && e['departmentId'] != departmentId) {
+          if (departmentId != null) {
+            if (e['departmentId'] != null &&
+                e['departmentId'] != departmentId) {
+              return false;
+            }
+          } else if (courseIds != null &&
+              e['courseId'] != null &&
+              !courseIds.contains(e['courseId'])) {
             return false;
           }
           if (courseId != null && e['courseId'] != courseId) return false;
@@ -894,6 +916,7 @@ class OfflineStore {
     bool clearDepartment = false,
     bool clearEndsAt = false,
     String? courseId,
+    bool clearCourse = false,
   }) async {
     await _ensureLoaded();
     final event = _calendar.firstWhere(
@@ -914,9 +937,19 @@ class OfflineStore {
     } else if (clearDepartment) {
       event['departmentId'] = null;
     }
-    if (courseId != null) event['courseId'] = courseId;
+    if (courseId != null) {
+      event['courseId'] = courseId;
+    } else if (clearCourse) {
+      event['courseId'] = null;
+    }
     await _persist(_calendarKey, _calendar);
     return Map<String, dynamic>.from(event);
+  }
+
+  Future<Map<String, dynamic>?> getCalendarEvent(String id) async {
+    await _ensureLoaded();
+    final event = _calendar.where((e) => e['id'] == id).firstOrNull;
+    return event == null ? null : Map<String, dynamic>.from(event);
   }
 
   Future<void> deleteCalendarEvent(String id) async {
@@ -932,6 +965,7 @@ class OfflineStore {
   Future<Map<String, dynamic>> importStudents({
     required String courseId,
     required List<Map<String, dynamic>> rows,
+    String enrolledBy = 'u-admin-1',
   }) async {
     await _ensureLoaded();
     final imported = <Map<String, dynamic>>[];
@@ -970,7 +1004,7 @@ class OfflineStore {
           'studentId': id,
           'departmentId': departmentId,
           'enrolledAt': DateTime.now().toIso8601String(),
-          'enrolledBy': 'u-admin-1',
+          'enrolledBy': enrolledBy,
         });
       }
       imported.add({

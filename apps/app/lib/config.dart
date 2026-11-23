@@ -19,4 +19,13 @@ class AppConfig {
     'OFFLINE_MODE',
     defaultValue: true,
   );
+
+  /// Offers "Sign in with a code" (SMS) against the real API. Off by default:
+  /// the API has no SMS provider, so online codes are only logged when it runs
+  /// with `SMS_DEV_ECHO=true`. Enable with `--dart-define=SMS_SIGN_IN=true`
+  /// once codes can actually reach users. The offline build always offers it.
+  static const bool smsSignIn = bool.fromEnvironment(
+    'SMS_SIGN_IN',
+    defaultValue: false,
+  );
 }

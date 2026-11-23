@@ -11,6 +11,8 @@ export interface EffortMetrics {
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
+/** Scoring rules are mirrored in crates/telemetry-core/src/lib.rs; both are
+ *  asserted against crates/telemetry-core/tests/fixtures/scoring-parity.json. */
 export function computeEffortMetrics(events: TelemetryEvent[]): EffortMetrics {
   let keystrokes = 0;
   let pastes = 0;
@@ -21,14 +23,16 @@ export function computeEffortMetrics(events: TelemetryEvent[]): EffortMetrics {
   for (const event of events) {
     if (event.type === "keystroke") {
       keystrokes += 1;
-      const delta = Number(event.payload.deltaMs ?? 0);
+      // Payloads come from the client: tolerate a missing or non-object one.
+      const delta = Number(event.payload?.deltaMs ?? 0);
       activeMs += Number.isFinite(delta) ? clamp(delta, 0, 5_000) : 0;
     }
 
     if (event.type === "paste") {
       pastes += 1;
-      const characters = Number(event.payload.characterCount ?? 0);
-      pasteVolume += Number.isFinite(characters) ? Math.max(0, characters) : 0;
+      const characters = Number(event.payload?.characterCount ?? 0);
+      // A character count is whole; fractions would also break the INTEGER column.
+      pasteVolume += Number.isFinite(characters) ? Math.max(0, Math.floor(characters)) : 0;
     }
 
     if (event.type === "ai_tab_switch") {

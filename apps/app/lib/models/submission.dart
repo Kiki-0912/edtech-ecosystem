@@ -1,3 +1,4 @@
+import 'package:edtech_app/formats.dart';
 import 'package:edtech_app/models/attachment.dart';
 
 class Submission {
@@ -27,9 +28,7 @@ class Submission {
       assignmentId: json['assignmentId'] as String,
       studentId: json['studentId'] as String,
       status: json['status'] as String,
-      submittedAt: json['submittedAt'] == null
-          ? null
-          : DateTime.tryParse(json['submittedAt'] as String? ?? ''),
+      submittedAt: parseServerTime(json['submittedAt']),
       attachments: (json['attachments'] as List<dynamic>?)
               ?.map((item) => Attachment.fromJson(item as Map<String, dynamic>))
               .toList() ??
@@ -45,7 +44,7 @@ class Submission {
       'assignmentId': assignmentId,
       'studentId': studentId,
       'status': status,
-      'submittedAt': submittedAt?.toIso8601String(),
+      'submittedAt': submittedAt?.toUtc().toIso8601String(),
       'attachments': attachments.map((item) => item.toJson()).toList(),
       'grade': grade,
       'effortScore': effortScore,

@@ -4,6 +4,7 @@ import {
   createCalendarEvent,
   createMessage,
   deleteCalendarEvent,
+  getCalendarEvent,
   getCalendarEvents,
   getChannel,
   getChannelsByCourse,
@@ -15,6 +16,42 @@ import {
   updateCalendarEvent,
 } from "../store/db";
 import type { CalendarEventKind } from "../store/db";
+import { callerOf, managesCourseId, readableCourseIds } from "../middleware/scope";
+import {
+  NULLABLE_TEXT,
+  TEXT,
+  bodySchema,
+  isDateString,
+  rejectInvalidBody,
+} from "../middleware/validation";
+
+const EVENT_KINDS: CalendarEventKind[] = ["assignment", "quiz", "class", "institution"];
+
+const EVENT_PROPERTIES = {
+  title: TEXT,
+  kind: { type: "string", enum: EVENT_KINDS },
+  startsAt: TEXT,
+  endsAt: NULLABLE_TEXT,
+  departmentId: NULLABLE_TEXT,
+  courseId: NULLABLE_TEXT,
+};
+const CREATE_EVENT_SCHEMA = {
+  type: "object",
+  required: ["title", "kind", "startsAt"],
+  properties: EVENT_PROPERTIES,
+};
+const UPDATE_EVENT_SCHEMA = { type: "object", properties: EVENT_PROPERTIES };
+
+/** startsAt/endsAt must parse as dates when present. Returns an error message or null. */
+function invalidEventDates(body: { startsAt?: string; endsAt?: string | null }): string | null {
+  if (body.startsAt !== undefined && !isDateString(body.startsAt)) {
+    return "startsAt must be a date";
+  }
+  if (body.endsAt !== undefined && body.endsAt !== null && !isDateString(body.endsAt)) {
+    return "endsAt must be a date or null";
+  }
+  return null;
+}
 
 const fail = (
   reply: FastifyReply,
@@ -27,10 +64,21 @@ export async function classroomRoutes(app: FastifyInstance) {
   app.get<{
     Querystring: { userId?: string; departmentId?: string };
   }>("/calendar", async (request, reply) => {
-    const userId = request.query.userId;
+    const caller = callerOf(request);
     const departmentId = request.query.departmentId;
     let courseIds: Set<string>;
 
+    // Only admins may look at another user's calendar; everyone else always
+    // gets their own, whatever userId they pass.
+    if (caller?.role !== "admin") {
+      courseIds = await readableCourseIds(caller);
+      const events = await getCalendarEvents(courseIds, departmentId);
+      return {
+        data: events.filter((event) => event.courseId === null || courseIds.has(event.courseId)),
+      };
+    }
+
+    const userId = request.query.userId;
     if (userId) {
       const user = await getUser(userId);
       if (!user) {
@@ -64,13 +112,12 @@ export async function classroomRoutes(app: FastifyInstance) {
       departmentId?: string | null;
       courseId?: string | null;
     };
-  }>("/calendar", async (request, reply) => {
-    const caller = (request as any).user as
-      | { id: string; role: string }
-      | undefined;
+  }>("/calendar", bodySchema(CREATE_EVENT_SCHEMA), async (request, reply) => {
+    const caller = callerOf(request);
     if (caller?.role !== "admin" && caller?.role !== "teacher") {
       return fail(reply, 403, "FORBIDDEN", "Admin or teacher only");
     }
+    if (rejectInvalidBody(request, reply)) return reply;
 
     const { title, kind, startsAt, endsAt, departmentId, courseId } =
       request.body ?? {};
@@ -81,6 +128,13 @@ export async function classroomRoutes(app: FastifyInstance) {
         "INVALID_BODY",
         "title, kind and startsAt are required",
       );
+    }
+    const dateError = invalidEventDates({ startsAt, endsAt });
+    if (dateError) return fail(reply, 400, "INVALID_BODY", dateError);
+    // Course-less (institution-wide) events are admin-only, like editing them:
+    // a teacher picks one of their courses, so they can manage it afterwards.
+    if (!(await managesCourseId(caller, courseId))) {
+      return fail(reply, 403, "FORBIDDEN", "You can only add events to courses you teach");
     }
 
     const event = await createCalendarEvent({
@@ -104,15 +158,30 @@ export async function classroomRoutes(app: FastifyInstance) {
       departmentId?: string | null;
       courseId?: string | null;
     };
-  }>("/calendar/:eventId", async (request, reply) => {
-    const caller = (request as any).user as
-      | { id: string; role: string }
-      | undefined;
+  }>("/calendar/:eventId", bodySchema(UPDATE_EVENT_SCHEMA), async (request, reply) => {
+    const caller = callerOf(request);
     if (caller?.role !== "admin" && caller?.role !== "teacher") {
       return fail(reply, 403, "FORBIDDEN", "Admin or teacher only");
     }
+    if (rejectInvalidBody(request, reply)) return reply;
+    const body = request.body ?? {};
+    const dateError = invalidEventDates(body);
+    if (dateError) return fail(reply, 400, "INVALID_BODY", dateError);
 
-    const event = await updateCalendarEvent(request.params.eventId, request.body ?? {});
+    const existing = await getCalendarEvent(request.params.eventId);
+    if (!existing) {
+      return fail(reply, 404, "EVENT_NOT_FOUND", "Calendar event not found");
+    }
+    // A teacher may edit only their own courses' events, and not move one
+    // into a course they do not teach.
+    if (
+      !(await managesCourseId(caller, existing.courseId)) ||
+      (body.courseId !== undefined && !(await managesCourseId(caller, body.courseId)))
+    ) {
+      return fail(reply, 403, "FORBIDDEN", "You can only edit events of courses you teach");
+    }
+
+    const event = await updateCalendarEvent(request.params.eventId, body);
     if (!event) {
       return fail(reply, 404, "EVENT_NOT_FOUND", "Calendar event not found");
     }
@@ -122,11 +191,17 @@ export async function classroomRoutes(app: FastifyInstance) {
   app.delete<{ Params: { eventId: string } }>(
     "/calendar/:eventId",
     async (request, reply) => {
-      const caller = (request as any).user as
-        | { id: string; role: string }
-        | undefined;
+      const caller = callerOf(request);
       if (caller?.role !== "admin" && caller?.role !== "teacher") {
         return fail(reply, 403, "FORBIDDEN", "Admin or teacher only");
+      }
+
+      const existing = await getCalendarEvent(request.params.eventId);
+      if (!existing) {
+        return fail(reply, 404, "EVENT_NOT_FOUND", "Calendar event not found");
+      }
+      if (!(await managesCourseId(caller, existing.courseId))) {
+        return fail(reply, 403, "FORBIDDEN", "You can only delete events of courses you teach");
       }
 
       if (!(await deleteCalendarEvent(request.params.eventId))) {
@@ -156,6 +231,11 @@ export async function classroomRoutes(app: FastifyInstance) {
       const channel = await getChannel(request.params.channelId);
       if (!channel) {
         return fail(reply, 404, "CHANNEL_NOT_FOUND", "Channel not found");
+      }
+      // Reading is members-only, like posting.
+      const callerId = callerOf(request)?.id;
+      if (!callerId || !channel.memberIds.includes(callerId)) {
+        return fail(reply, 403, "NOT_A_MEMBER", "User is not a member of this channel");
       }
 
       const data = await getMessages(channel.id);

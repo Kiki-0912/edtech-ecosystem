@@ -267,4 +267,24 @@ ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE sms_verification_codes ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
 `,
   },
+  {
+    // effort_scores rows are now keyed `<studentId>:<sessionId>`. Rows written
+    // before that keep the raw session id, so a new upload for the same session
+    // would add a second row that getEffortScore (first row by seq) never reads.
+    // Prefix them; where both exist, keep the newer values at the older seq.
+    version: 4,
+    name: "effort_scores_namespaced",
+    sql: `
+UPDATE effort_scores namespaced
+   SET seq = legacy.seq
+  FROM effort_scores legacy
+ WHERE namespaced.session_id = legacy.student_id || ':' || legacy.session_id;
+DELETE FROM effort_scores legacy
+ USING effort_scores namespaced
+ WHERE namespaced.session_id = legacy.student_id || ':' || legacy.session_id;
+UPDATE effort_scores
+   SET session_id = student_id || ':' || session_id
+ WHERE left(session_id, length(student_id) + 1) <> student_id || ':';
+`,
+  },
 ];

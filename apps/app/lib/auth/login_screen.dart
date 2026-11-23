@@ -1,9 +1,17 @@
 import 'package:edtech_app/auth/auth_layout.dart';
 import 'package:edtech_app/auth/auth_provider.dart';
+import 'package:edtech_app/config.dart';
+import 'package:edtech_app/services/api_service.dart';
 import 'package:edtech_app/ui/ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
+
+/// Whether the "Sign in with a code" entry point is shown. Offline, codes are
+/// simulated; online it needs [AppConfig.smsSignIn], because without an SMS
+/// provider the API never delivers the code and the flow cannot finish.
+bool get smsSignInAvailable =>
+    ApiService.instance.isOffline || AppConfig.smsSignIn;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -87,14 +95,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     : null,
                 onSubmitted: (_) => _submit(),
               ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  key: const Key('login-sms'),
-                  onPressed: () => context.push('/verify-sms'),
-                  child: const Text('Forgot password? Sign in with a code'),
+              if (smsSignInAvailable)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    key: const Key('login-sms'),
+                    onPressed: () => context.push('/verify-sms'),
+                    child: const Text('Forgot password? Sign in with a code'),
+                  ),
                 ),
-              ),
               const SizedBox(height: AppSpacing.xs),
               SizedBox(
                 height: 48,

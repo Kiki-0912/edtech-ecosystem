@@ -1,0 +1,6 @@
+{
+  "name": "@edtech/extension",
+  "private": true,
+  "description": "Marks the extension sources as ES modules for node --check and Node unit tests. Not an npm workspace; nothing is installed or built.",
+  "type": "module"
+}

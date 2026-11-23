@@ -4,32 +4,28 @@
   "description": "Process-based academic integrity monitoring: effort scores, paste tracking and AI platform tab-switch logging.",
   "version": "0.2.0",
   "minimum_chrome_version": "110",
-  "permissions": ["storage", "tabs"],
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "scripting"
+  ],
   "options_ui": {
     "page": "src/options.html",
     "open_in_tab": true
   },
   "optional_host_permissions": [
-    "https://*.example.edu/*",
-    "https://*.school.edu/*",
-    "https://*.university.edu/*",
-    "https://canvas.*.edu/*",
-    "https://classroom.google.com/*"
+    "http://*/*",
+    "https://*/*"
   ],
   "host_permissions": [
-    "https://*/api/v1/*"
+    "http://localhost:4000/*",
+    "https://edtech-ecosystem-api.netlify.app/*"
   ],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"
   },
-  "content_scripts": [
-    {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["src/content.js"],
-      "run_at": "document_idle"
-    }
-  ],
   "action": {
     "default_title": "Integrity Lens",
     "default_popup": "src/popup.html",

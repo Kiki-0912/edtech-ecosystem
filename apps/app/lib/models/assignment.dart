@@ -1,3 +1,5 @@
+import 'package:edtech_app/formats.dart';
+
 class Assignment {
   const Assignment({
     required this.id,
@@ -23,11 +25,9 @@ class Assignment {
       courseId: json['courseId'] as String,
       title: json['title'] as String,
       brief: json['brief'] as String,
-      dueAt:
-          DateTime.tryParse(json['dueAt'] as String? ?? '') ?? DateTime.now(),
+      dueAt: parseServerTime(json['dueAt']) ?? DateTime.now(),
       status: json['status'] as String,
-      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ??
-          DateTime.now(),
+      createdAt: parseServerTime(json['createdAt']) ?? DateTime.now(),
     );
   }
 
@@ -37,9 +37,9 @@ class Assignment {
       'courseId': courseId,
       'title': title,
       'brief': brief,
-      'dueAt': dueAt.toIso8601String(),
+      'dueAt': dueAt.toUtc().toIso8601String(),
       'status': status,
-      'createdAt': createdAt.toIso8601String(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
     };
   }
 

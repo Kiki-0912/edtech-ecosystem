@@ -47,18 +47,9 @@
     }
   });
 
-  function isSensitiveTarget(target) {
-    if (!(target instanceof HTMLElement)) {
-      return false;
-    }
-
-    if (target instanceof HTMLInputElement) {
-      const type = (target.getAttribute("type") || "text").toLowerCase();
-      return type === "password" || type === "hidden";
-    }
-
-    return Boolean(target.closest("[data-sensitive]"));
-  }
+  // From privacy.js, injected first. Without it, treat everything as sensitive.
+  const isSensitiveEvent =
+    globalThis.IntegrityLensPrivacy?.isSensitiveEvent ?? (() => true);
 
   function enqueue(type, payload) {
     if (!consentEnabled) {
@@ -93,7 +84,7 @@
   window.addEventListener(
     "keydown",
     (event) => {
-      if (event.isComposing || MODIFIER_KEYS.has(event.key) || isSensitiveTarget(event.target)) {
+      if (event.isComposing || MODIFIER_KEYS.has(event.key) || isSensitiveEvent(event)) {
         return;
       }
 
@@ -108,7 +99,7 @@
   window.addEventListener(
     "paste",
     (event) => {
-      if (isSensitiveTarget(event.target)) {
+      if (isSensitiveEvent(event)) {
         return;
       }
 
@@ -121,6 +112,16 @@
   window.addEventListener(
     "mousemove",
     (event) => {
+      if (!consentEnabled) {
+        return;
+      }
+      if (isSensitiveEvent(event)) {
+        // Forget the last point so no distance is measured across the region.
+        lastCursorX = null;
+        lastCursorY = null;
+        return;
+      }
+
       const now = performance.now();
       if (now - lastCursorAt < CURSOR_SAMPLE_MS) {
         return;

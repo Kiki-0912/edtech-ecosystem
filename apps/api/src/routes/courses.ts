@@ -14,6 +14,7 @@ import {
   getUsers,
   updateSubmission,
 } from "../store/db";
+import { callerOf, managesCourse } from "../middleware/scope";
 
 const fail = (
   reply: FastifyReply,
@@ -127,6 +128,11 @@ export async function courseRoutes(app: FastifyInstance) {
       const course = await getCourse(assignment.courseId);
       if (!course) {
         return fail(reply, 404, "COURSE_NOT_FOUND", "Course not found");
+      }
+      // The roster shows every student's status, grade and effort score:
+      // admins, and the teacher of this course, only.
+      if (!managesCourse(callerOf(request), course)) {
+        return fail(reply, 403, "FORBIDDEN", "Only the course's teacher or an admin can view the roster");
       }
 
       const allSubmissions = await getSubmissionsByAssignment(assignment.id);

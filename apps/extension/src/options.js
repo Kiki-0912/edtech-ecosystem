@@ -1,3 +1,12 @@
+import {
+  DEFAULT_API_BASE_URL,
+  effectiveOrigins,
+  normalizeBaseUrl,
+  normalizeOrigin,
+  originMatchPattern,
+  parseOrigins,
+} from "./lib.js";
+
 const SETTINGS_KEY = "settings";
 const AUTH_KEY = "auth";
 
@@ -16,10 +25,42 @@ const elements = {
   statLastUpload: document.getElementById("stat-last-upload"),
   statError: document.getElementById("stat-error"),
   flush: document.getElementById("flush"),
+  allowedOrigins: document.getElementById("allowed-origins"),
+  saveOrigins: document.getElementById("save-origins"),
+  originsStatus: document.getElementById("origins-status"),
 };
 
-function normalizeBaseUrl(url) {
-  return String(url ?? "").trim().replace(/\/+$/, "");
+/**
+ * Ask for host access to these origins. chrome.permissions.request needs the
+ * click's user gesture, so call this synchronously at the top of a handler,
+ * before any await. Resolves to the origins that ended up granted.
+ */
+function requestOrigins(origins) {
+  const patterns = origins.map(originMatchPattern);
+  if (patterns.length === 0) {
+    return Promise.resolve([]);
+  }
+  return chrome.permissions
+    .request({ origins: patterns })
+    .catch(() => false)
+    .then(async (granted) => {
+      if (granted) {
+        return origins;
+      }
+      const kept = [];
+      for (const origin of origins) {
+        if (await chrome.permissions.contains({ origins: [originMatchPattern(origin)] })) {
+          kept.push(origin);
+        }
+      }
+      return kept;
+    });
+}
+
+/** Host access for the API itself (needed for uploads and /health). */
+function requestApiAccess(base) {
+  const origin = normalizeOrigin(base);
+  return origin ? requestOrigins([origin]) : Promise.resolve([]);
 }
 
 function setStatus(element, text, kind) {
@@ -38,7 +79,15 @@ async function loadState() {
   const settings = syncStored[SETTINGS_KEY] ?? {};
   const auth = localStored[AUTH_KEY] ?? {};
 
-  elements.apiUrl.value = settings.apiBaseUrl ?? "http://localhost:4000";
+  elements.apiUrl.value = settings.apiBaseUrl ?? DEFAULT_API_BASE_URL;
+  elements.allowedOrigins.value = Array.isArray(settings.allowedOrigins)
+    ? settings.allowedOrigins.join("\n")
+    : "";
+  setStatus(
+    elements.originsStatus,
+    `Monitoring: ${effectiveOrigins(settings).join(", ") || "no sites"}`,
+    null,
+  );
   elements.consent.checked = Boolean(settings.consentEnabled);
 
   if (auth.studentName) {
@@ -66,8 +115,10 @@ async function saveSettings(patch) {
 
 elements.testConnection.addEventListener("click", async () => {
   const base = normalizeBaseUrl(elements.apiUrl.value);
+  const access = requestApiAccess(base);
   setStatus(elements.accountStatus, "Testing connection…", null);
   try {
+    await access;
     const response = await fetch(`${base}/health`, { method: "GET" });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -89,6 +140,7 @@ elements.testConnection.addEventListener("click", async () => {
 
 elements.login.addEventListener("click", async () => {
   const base = normalizeBaseUrl(elements.apiUrl.value);
+  const access = requestApiAccess(base);
   const loginId = elements.loginId.value.trim();
   const password = elements.loginPassword.value;
 
@@ -99,6 +151,7 @@ elements.login.addEventListener("click", async () => {
 
   setStatus(elements.accountStatus, "Signing in…", null);
   try {
+    await access;
     const isEmail = loginId.includes("@");
     const response = await fetch(`${base}/api/v1/auth/login`, {
       method: "POST",
@@ -112,6 +165,8 @@ elements.login.addEventListener("click", async () => {
       throw new Error(payload?.error?.message ?? `HTTP ${response.status}`);
     }
 
+    // The background worker sees this change, clears any "session expired"
+    // state and uploads this account's own queued batches.
     await chrome.storage.local.set({
       [AUTH_KEY]: {
         token: payload.data.token,
@@ -133,7 +188,7 @@ elements.login.addEventListener("click", async () => {
 
 elements.logout.addEventListener("click", async () => {
   await chrome.storage.local.remove(AUTH_KEY);
-  setStatus(elements.accountStatus, "Signed out. Queued data was kept locally.", null);
+  setStatus(elements.accountStatus, "Signed out. Queued data stays with this account and uploads only after it signs in again.", null);
 });
 
 elements.consent.addEventListener("change", async () => {
@@ -150,10 +205,34 @@ elements.consent.addEventListener("change", async () => {
 });
 
 elements.flush.addEventListener("click", async () => {
-  // Nudge the service worker by querying status; its interval loop uploads.
-  await chrome.runtime.sendMessage({ type: "get-sync-status" }).catch(() => {});
-  setTimeout(refreshStats, 500);
-  setTimeout(refreshStats, 2500);
+  elements.flush.disabled = true;
+  try {
+    // Runs a full flush in the service worker and waits for it to finish.
+    await chrome.runtime.sendMessage({ type: "flush-now" });
+  } catch {
+    // Status below shows whatever the worker recorded.
+  } finally {
+    elements.flush.disabled = false;
+    await refreshStats();
+  }
+});
+
+elements.saveOrigins.addEventListener("click", async () => {
+  const wanted = parseOrigins(elements.allowedOrigins.value);
+  // Before any await: the permission prompt needs this click's gesture.
+  const access = requestOrigins(wanted);
+  const granted = await access;
+  // An empty list means "use the API origin" (the default).
+  const settings = await saveSettings({ allowedOrigins: granted.length ? granted : undefined });
+  elements.allowedOrigins.value = granted.join("\n");
+  const skipped = wanted.filter((origin) => !granted.includes(origin));
+  setStatus(
+    elements.originsStatus,
+    skipped.length
+      ? `Access not granted for ${skipped.join(", ")}. Monitoring: ${effectiveOrigins(settings).join(", ")}`
+      : `Monitoring: ${effectiveOrigins(settings).join(", ") || "no sites"}`,
+    skipped.length ? "err" : "ok",
+  );
 });
 
 async function refreshStats() {

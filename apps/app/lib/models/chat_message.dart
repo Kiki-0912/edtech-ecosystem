@@ -1,3 +1,5 @@
+import 'package:edtech_app/formats.dart';
+
 class ChatMessage {
   const ChatMessage({
     required this.id,
@@ -19,8 +21,7 @@ class ChatMessage {
       channelId: json['channelId'] as String,
       authorId: json['authorId'] as String,
       body: json['body'] as String,
-      sentAt:
-          DateTime.tryParse(json['sentAt'] as String? ?? '') ?? DateTime.now(),
+      sentAt: parseServerTime(json['sentAt']) ?? DateTime.now(),
     );
   }
 
@@ -30,7 +31,7 @@ class ChatMessage {
       'channelId': channelId,
       'authorId': authorId,
       'body': body,
-      'sentAt': sentAt.toIso8601String(),
+      'sentAt': sentAt.toUtc().toIso8601String(),
     };
   }
 }

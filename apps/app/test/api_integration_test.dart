@@ -90,6 +90,25 @@ void main() {
     }
   });
 
+  test('assignment detail parses the API envelope (not demo data)', () async {
+    if (!await apiReachable()) {
+      markTestSkipped('API not reachable on localhost:4000');
+      return;
+    }
+    final assignments = await api.getAssignments('c-001');
+    for (final expected in assignments) {
+      final detail = await api.getAssignment(expected.id);
+      expect(detail.id, expected.id);
+      expect(detail.title, expected.title);
+      // Server times are UTC; models hand screens local time.
+      expect(detail.dueAt.isUtc, isFalse);
+    }
+    await expectLater(
+        api.getAssignment('no-such-assignment'),
+        throwsA(isA<ApiException>()
+            .having((e) => e.code, 'code', 'ASSIGNMENT_NOT_FOUND')));
+  });
+
   test('calendar events load and sort by start date', () async {
     if (!await apiReachable()) {
       markTestSkipped('API not reachable on localhost:4000');

@@ -2,6 +2,7 @@ import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/formats.dart';
 import 'package:edtech_app/models/assignment.dart';
 import 'package:edtech_app/models/attachment.dart';
+import 'package:edtech_app/models/submission.dart';
 import 'package:edtech_app/screens/courses/course_detail_screen.dart'
     show assignmentStatus;
 import 'package:edtech_app/services/api_service.dart';
@@ -28,6 +29,10 @@ class AssignmentScreen extends StatefulWidget {
 class _AssignmentScreenState extends State<AssignmentScreen> {
   Assignment? _assignment;
   List<Map<String, dynamic>> _roster = const [];
+
+  /// The signed-in student's own submission, from the last submit response.
+  /// The roster (which carries everyone's status) is staff-only in the API.
+  Submission? _mine;
   bool _loading = true;
   Object? _error;
 
@@ -39,6 +44,7 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
 
   Future<void> _load() async {
     final api = ApiService.instance;
+    final isStudent = context.read<AuthProvider>().user?.isStudent ?? false;
     setState(() {
       _loading = _assignment == null;
       _error = null;
@@ -46,7 +52,9 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
     try {
       final results = await Future.wait([
         api.getAssignment(widget.assignmentId),
-        api.getRoster(widget.assignmentId),
+        isStudent
+            ? Future.value(const <Map<String, dynamic>>[])
+            : api.getRoster(widget.assignmentId),
       ]);
       if (!mounted) return;
       setState(() {
@@ -71,6 +79,7 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
     final back = Align(
       alignment: Alignment.centerLeft,
       child: TextButton.icon(
+        key: const Key('assignment-back'),
         onPressed: () => context.go('/courses/${widget.courseId}'),
         icon: const Icon(Icons.arrow_back_rounded, size: 18),
         label: const Text('Back to course'),
@@ -91,7 +100,12 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
     }
 
     final (statusLabel, statusTone) = assignmentStatus(a);
-    final mine = _roster.where((r) => r['studentId'] == user?.id).firstOrNull;
+    final mine = _mine == null
+        ? null
+        : <String, dynamic>{
+            'status': _mine!.status,
+            'submittedAt': _mine!.submittedAt?.toUtc().toIso8601String(),
+          };
 
     return AppPage(
       title: a.title,
@@ -110,7 +124,10 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
             assignment: a,
             studentId: user!.id,
             current: mine,
-            onSubmitted: _load,
+            onSubmitted: (submission) async {
+              setState(() => _mine = submission);
+              await _load();
+            },
           )
         else
           _RosterCard(
@@ -147,7 +164,7 @@ class _SubmissionCard extends StatefulWidget {
   final Assignment assignment;
   final String studentId;
   final Map<String, dynamic>? current;
-  final Future<void> Function() onSubmitted;
+  final Future<void> Function(Submission submission) onSubmitted;
 
   @override
   State<_SubmissionCard> createState() => _SubmissionCardState();
@@ -175,7 +192,7 @@ class _SubmissionCardState extends State<_SubmissionCard> {
     }
     setState(() => _busy = true);
     try {
-      await ApiService.instance.submitAssignment(
+      final submission = await ApiService.instance.submitAssignment(
         assignmentId: widget.assignment.id,
         studentId: widget.studentId,
         attachments: [
@@ -193,7 +210,7 @@ class _SubmissionCardState extends State<_SubmissionCard> {
       _link.clear();
       _label.clear();
       showToast(context, 'Work submitted', kind: ToastKind.success);
-      await widget.onSubmitted();
+      await widget.onSubmitted(submission);
     } catch (e) {
       if (mounted) showToast(context, friendlyError(e), kind: ToastKind.error);
     } finally {
@@ -204,8 +221,7 @@ class _SubmissionCardState extends State<_SubmissionCard> {
   @override
   Widget build(BuildContext context) {
     final status = widget.current?['status']?.toString();
-    final submittedAt =
-        DateTime.tryParse(widget.current?['submittedAt']?.toString() ?? '');
+    final submittedAt = parseServerTime(widget.current?['submittedAt']);
     final hasSubmission = status == 'submitted' || status == 'late';
     final open = widget.assignment.isOpen;
 
@@ -220,7 +236,7 @@ class _SubmissionCardState extends State<_SubmissionCard> {
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
               child: Text(
-                'Handed in ${shortDate(submittedAt.toLocal())} at ${clockTime(submittedAt.toLocal())}.'
+                'Handed in ${shortDate(submittedAt)} at ${clockTime(submittedAt)}.'
                 '${open ? ' You can resubmit until the assignment closes.' : ''}',
                 style: context.text.bodyMedium,
               ),

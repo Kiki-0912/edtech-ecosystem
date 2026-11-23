@@ -1,6 +1,7 @@
 import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/formats.dart';
 import 'package:edtech_app/models/calendar_event.dart';
+import 'package:edtech_app/models/course.dart';
 import 'package:edtech_app/screens/home/home_widgets.dart' show kindLabel;
 import 'package:edtech_app/services/api_service.dart';
 import 'package:edtech_app/shell/app_shell.dart' show eventIcon, eventTone;
@@ -9,7 +10,9 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 /// Month calendar with an agenda for the selected day. Admins and teachers
-/// can create, edit and delete events (the API allows both roles).
+/// can create, edit and delete events (the API allows both roles). Teachers
+/// manage only their own courses' events; course-less (campus-wide) events are
+/// admin-only, so a teacher's new event always belongs to one of their courses.
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
@@ -20,6 +23,7 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   List<CalendarEvent> _events = const [];
   List<Map<String, dynamic>> _departments = const [];
+  List<Course> _courses = const [];
   String? _departmentId;
   late DateTime _month;
   late DateTime _selected;
@@ -33,7 +37,24 @@ class _CalendarScreenState extends State<CalendarScreen> {
     _month = DateTime(now.year, now.month);
     _selected = DateTime(now.year, now.month, now.day);
     _loadDepartments();
+    _loadCourses();
     _load();
+  }
+
+  /// The courses an event can belong to: every course for admins, the
+  /// courses they teach for teachers.
+  Future<void> _loadCourses() async {
+    final user = context.read<AuthProvider>().user;
+    if (user == null || !(user.isAdmin || user.isTeacher)) return;
+    try {
+      final all = await ApiService.instance.getCourses();
+      if (!mounted) return;
+      setState(() => _courses = user.isAdmin
+          ? all
+          : all.where((c) => c.teacherId == user.id).toList());
+    } catch (_) {
+      // Admins can still add campus-wide events; teachers see the error.
+    }
   }
 
   Future<void> _loadDepartments() async {
@@ -96,6 +117,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
         day: _selected,
         departments: _departments,
         defaultDepartmentId: _departmentId,
+        courses: _courses,
+        requireCourse: !(context.read<AuthProvider>().user?.isAdmin ?? false),
       ),
     );
     if (result == null || !mounted) return;
@@ -117,6 +140,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           startsAt: draft.startsAt,
           endsAt: draft.endsAt,
           departmentId: draft.departmentId,
+          courseId: draft.courseId,
         );
         if (mounted) showToast(context, 'Event added', kind: ToastKind.success);
       } else {
@@ -127,7 +151,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           startsAt: draft.startsAt,
           endsAt: draft.endsAt,
           departmentId: draft.departmentId,
-          courseId: event.courseId,
+          courseId: draft.courseId,
         );
         if (mounted) {
           showToast(context, 'Event updated', kind: ToastKind.success);
@@ -452,6 +476,7 @@ class _EventDraft {
     required this.startsAt,
     this.endsAt,
     this.departmentId,
+    this.courseId,
   });
 
   final String title;
@@ -459,6 +484,7 @@ class _EventDraft {
   final DateTime startsAt;
   final DateTime? endsAt;
   final String? departmentId;
+  final String? courseId;
 }
 
 /// Returned by the editor when the user confirms deletion.
@@ -472,12 +498,20 @@ class _EventEditor extends StatefulWidget {
     required this.day,
     required this.departments,
     required this.defaultDepartmentId,
+    required this.courses,
+    required this.requireCourse,
   });
 
   final CalendarEvent? initial;
   final DateTime day;
   final List<Map<String, dynamic>> departments;
   final String? defaultDepartmentId;
+
+  /// Courses the caller may put the event in.
+  final List<Course> courses;
+
+  /// Teachers must pick a course; only admins may leave it campus-wide.
+  final bool requireCourse;
 
   @override
   State<_EventEditor> createState() => _EventEditorState();
@@ -491,6 +525,7 @@ class _EventEditorState extends State<_EventEditor> {
   late TimeOfDay _start;
   TimeOfDay? _end;
   String? _departmentId;
+  String? _courseId;
 
   static const kinds = {
     'class': 'Class',
@@ -514,6 +549,9 @@ class _EventEditorState extends State<_EventEditor> {
     if (!widget.departments.any((d) => d['id'] == _departmentId)) {
       _departmentId = null;
     }
+    _courseId = e == null
+        ? (widget.requireCourse ? widget.courses.firstOrNull?.id : null)
+        : e.courseId;
   }
 
   @override
@@ -540,6 +578,7 @@ class _EventEditorState extends State<_EventEditor> {
       startsAt: startsAt,
       endsAt: endsAt,
       departmentId: _departmentId,
+      courseId: _courseId,
     ));
   }
 
@@ -634,6 +673,35 @@ class _EventEditorState extends State<_EventEditor> {
                   ),
               ],
               onChanged: (v) => setState(() => _departmentId = v),
+            ),
+          ],
+          if (widget.requireCourse || widget.courses.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            DropdownButtonFormField<String?>(
+              key: const Key('event-course'),
+              initialValue: _courseId,
+              isExpanded: true,
+              decoration: const InputDecoration(labelText: 'Course'),
+              items: [
+                if (!widget.requireCourse)
+                  const DropdownMenuItem<String?>(
+                      value: null, child: Text('Campus-wide')),
+                for (final c in widget.courses)
+                  DropdownMenuItem<String?>(
+                    value: c.id,
+                    child: Text('${c.code} · ${c.title}',
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                // Keep an event's course selectable even if it is not listed.
+                if (_courseId != null &&
+                    !widget.courses.any((c) => c.id == _courseId))
+                  DropdownMenuItem<String?>(
+                      value: _courseId, child: Text(_courseId!)),
+              ],
+              onChanged: (v) => setState(() => _courseId = v),
+              validator: (v) => widget.requireCourse && v == null
+                  ? 'Pick a course you teach'
+                  : null,
             ),
           ],
           const SizedBox(height: AppSpacing.lg),

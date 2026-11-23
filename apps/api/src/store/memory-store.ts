@@ -338,6 +338,45 @@ function nowISO() {
   return new Date().toISOString();
 }
 
+/**
+ * An error shaped like the `pg` driver's constraint violations, so the API maps
+ * it exactly as it maps Postgres (23505 -> 409 CONFLICT, 23503 -> 400).
+ */
+function constraintError(code: "23505" | "23503", message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { code });
+}
+
+/** Like the partial unique indexes users_email_unique / users_phone_unique. */
+function assertUniqueContact(email: string | undefined, phone: string | undefined, userId: string) {
+  for (const [column, value] of [
+    ["email", email],
+    ["phone", phone],
+  ] as const) {
+    if (!value) continue;
+    if (db.users.some((row) => row.id !== userId && row[column] === value)) {
+      throw constraintError(
+        "23505",
+        `duplicate key value violates unique constraint "users_${column}_unique"`,
+      );
+    }
+  }
+}
+
+/** Like a foreign key: the referenced row must exist. */
+function assertReference(
+  table: "users" | "courses" | "colleges" | "departments",
+  id: string | null | undefined,
+  constraint: string,
+) {
+  if (id === null || id === undefined) return;
+  if (!db[table].some((row) => row.id === id)) {
+    throw constraintError(
+      "23503",
+      `insert or update violates foreign key constraint "${constraint}"`,
+    );
+  }
+}
+
 function daysAgo(days: number) {
   return new Date(Date.now() - days * 86_400_000).toISOString();
 }
@@ -755,6 +794,10 @@ export function createUser(input: {
   createdAt?: string;
 }): User {
   const createdAt = input.createdAt || nowISO();
+  if (db.users.some((row) => row.id === input.id)) {
+    throw constraintError("23505", 'duplicate key value violates unique constraint "users_pkey"');
+  }
+  assertUniqueContact(input.email, input.phone, input.id);
   db.users.push({
     id: input.id,
     display_name: input.displayName,
@@ -814,6 +857,7 @@ export function updateUser(
   ) {
     return "last_admin";
   }
+  assertUniqueContact(updates.email, updates.phone, userId);
   if (updates.passwordHash !== undefined || roleChanged || deactivating) {
     row.token_version = Number(row.token_version ?? 0) + 1;
   }
@@ -898,6 +942,7 @@ export function createDepartment(input: {
   category: DepartmentCategory;
   durationMonths: number;
 }): Department {
+  assertReference("colleges", input.collegeId, "departments_college_id_fkey");
   const now = nowISO();
   const row = {
     id: randomUUID(),
@@ -1044,6 +1089,8 @@ export function createCalendarEvent(input: {
   departmentId?: string | null;
   courseId?: string | null;
 }): CalendarEvent {
+  assertReference("courses", input.courseId, "calendar_events_course_id_fkey");
+  assertReference("departments", input.departmentId, "calendar_events_department_id_fkey");
   const row = {
     id: randomUUID(),
     course_id: input.courseId ?? null,
@@ -1070,6 +1117,8 @@ export function updateCalendarEvent(
 ): CalendarEvent | undefined {
   const row = db.calendar_events.find((event) => event.id === eventId);
   if (!row) return undefined;
+  assertReference("courses", updates.courseId, "calendar_events_course_id_fkey");
+  assertReference("departments", updates.departmentId, "calendar_events_department_id_fkey");
   if (updates.title !== undefined) row.title = updates.title;
   if (updates.kind !== undefined) row.kind = updates.kind;
   if (updates.startsAt !== undefined) row.starts_at = updates.startsAt;
@@ -1077,6 +1126,11 @@ export function updateCalendarEvent(
   if (updates.departmentId !== undefined) row.department_id = updates.departmentId;
   if (updates.courseId !== undefined) row.course_id = updates.courseId;
   return toCalendarEvent(row);
+}
+
+export function getCalendarEvent(eventId: string): CalendarEvent | undefined {
+  const row = db.calendar_events.find((event) => event.id === eventId);
+  return row ? toCalendarEvent(row) : undefined;
 }
 
 export function deleteCalendarEvent(eventId: string): boolean {
@@ -1129,6 +1183,21 @@ export function createMessage(input: {
 
 export function getTelemetryBatches(): SignedTelemetryBatch[] {
   return db.telemetry_batches;
+}
+
+/** One stored batch by id (replay detection), without scanning every student's. */
+export function getTelemetryBatch(batchId: string): SignedTelemetryBatch | undefined {
+  return db.telemetry_batches.find((batch) => batch.batchId === batchId);
+}
+
+/** The stored batches of one student + assignment, in upload order. */
+export function getTelemetryBatchesFor(
+  studentId: string,
+  assignmentId: string,
+): SignedTelemetryBatch[] {
+  return db.telemetry_batches.filter(
+    (batch) => batch.studentId === studentId && batch.assignmentId === assignmentId,
+  );
 }
 
 export function hasTelemetryBatch(studentId: string, assignmentId: string): boolean {
@@ -1284,6 +1353,8 @@ export function upsertAttendanceRecord(input: {
   markedBy: string;
   notes?: string;
 }): AttendanceRecord {
+  assertReference("courses", input.courseId, "attendance_records_course_id_fkey");
+  assertReference("users", input.studentId, "attendance_records_student_id_fkey");
   const existing = db.attendance_records.find(
     (record) =>
       record.course_id === input.courseId &&
@@ -1345,6 +1416,8 @@ export function upsertTeacherNote(input: {
   content: string;
   authorId: string;
 }): TeacherNote {
+  assertReference("courses", input.courseId, "teacher_notes_course_id_fkey");
+  assertReference("users", input.authorId, "teacher_notes_author_id_fkey");
   const now = nowISO();
   const existing = db.teacher_notes.find((note) => note.id === input.id);
   if (existing) {
@@ -1401,6 +1474,8 @@ export function enrollStudentInDepartment(input: {
   departmentId: string;
   enrolledBy: string;
 }): StudentDepartment {
+  assertReference("users", input.studentId, "student_departments_student_id_fkey");
+  assertReference("departments", input.departmentId, "student_departments_department_id_fkey");
   const existing = db.student_departments.find(
     (entry) =>
       entry.student_id === input.studentId &&

@@ -52,6 +52,10 @@ void main() {
     // Teachers can edit (previously admin-only, although the API allows it).
     await tester.tap(find.byKey(const Key('calendar-add')));
     await settle(tester);
+    // Campus-wide events are admin-only, so a teacher's event gets one of
+    // their courses (no "Campus-wide" choice), and they can edit it later.
+    expect(find.byKey(const Key('event-course')), findsOneWidget);
+    expect(find.text('Campus-wide'), findsNothing);
     await tester.enterText(find.byKey(const Key('event-title')), 'Lab review');
     await tester.tap(find.byKey(const Key('event-add-end')));
     await settle(tester);
@@ -61,24 +65,56 @@ void main() {
     expect(find.text('Event added'), findsOneWidget);
     expect(find.text('Lab review'), findsOneWidget);
 
-    // Edit it.
     await tester.tap(find.text('Lab review'));
     await settle(tester);
     await tester.enterText(
         find.byKey(const Key('event-title')), 'Lab review (moved)');
     await tester.tap(find.byKey(const Key('event-save')));
     await settle(tester);
+    expect(find.text('Event updated'), findsOneWidget);
     expect(find.text('Lab review (moved)'), findsOneWidget);
 
+    // Their own course's event (HCI Quiz 1, CS 301, seeded 3 days out).
+    final now = DateTime.now();
+    final quizDay = DateTime(now.year, now.month, now.day + 3);
+    if (quizDay.month != now.month) {
+      await tester.tap(find.byKey(const Key('calendar-next')));
+      await settle(tester);
+    }
+    await tester.tap(
+        find.byKey(Key('day-${quizDay.year}-${quizDay.month}-${quizDay.day}')));
+    await settle(tester);
+    await tester.tap(find.text('HCI Quiz 1'));
+    await settle(tester);
+    await tester.enterText(
+        find.byKey(const Key('event-title')), 'HCI Quiz 1 (moved)');
+    await tester.tap(find.byKey(const Key('event-save')));
+    await settle(tester);
+    expect(find.text('HCI Quiz 1 (moved)'), findsOneWidget);
+
     // Delete requires confirmation.
-    await tester.tap(find.text('Lab review (moved)'));
+    await tester.tap(find.text('HCI Quiz 1 (moved)'));
     await settle(tester);
     await tester.tap(find.byKey(const Key('event-delete')));
     await settle(tester);
     expect(find.text('Delete event?'), findsOneWidget);
     await tester.tap(find.byKey(const Key('confirm-dialog-ok')));
     await settle(tester);
-    expect(find.text('Lab review (moved)'), findsNothing);
+    expect(find.text('HCI Quiz 1 (moved)'), findsNothing);
+  });
+
+  testWidgets('admins may add campus-wide events', (tester) async {
+    addTearDown(tester.view.reset);
+    final auth = await signedIn('admin');
+    await pump(tester, auth, const CalendarScreen());
+    await tester.tap(find.byKey(const Key('calendar-add')));
+    await settle(tester);
+    expect(find.text('Campus-wide'), findsOneWidget);
+    await tester.enterText(find.byKey(const Key('event-title')), 'Open day');
+    await tester.tap(find.byKey(const Key('event-save')));
+    await settle(tester);
+    expect(find.text('Event added'), findsOneWidget);
+    expect(find.text('Open day'), findsOneWidget);
   });
 
   testWidgets('empty day shows an empty state instead of every event',

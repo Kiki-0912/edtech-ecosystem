@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:edtech_app/auth/auth_layout.dart';
 import 'package:edtech_app/auth/auth_provider.dart';
+import 'package:edtech_app/auth/login_screen.dart' show smsSignInAvailable;
 import 'package:edtech_app/ui/ui.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -115,63 +116,69 @@ class _VerifySmsScreenState extends State<VerifySmsScreen> {
           child: const Text('Back to sign in'),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _StepIndicator(step: _codeSent ? 1 : 0),
-          const SizedBox(height: AppSpacing.lg),
-          if (!_codeSent) ...[
-            TextField(
-              key: const Key('sms-phone'),
-              controller: _phone,
-              keyboardType: TextInputType.phone,
-              autofillHints: const [AutofillHints.telephoneNumber],
-              onSubmitted: (_) => _sendCode(),
-              decoration: const InputDecoration(
-                labelText: 'Phone number',
-                prefixIcon: Icon(Icons.phone_outlined, size: 20),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            SizedBox(
-              height: 48,
-              child: BusyButton(
-                key: const Key('sms-send'),
-                label: 'Send code',
-                busy: loading,
-                onPressed: _sendCode,
-              ),
-            ),
-          ] else ...[
-            OtpInput(
-              controller: _code,
-              focusNode: _codeFocus,
-              onCompleted: (_) => _verify(),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            SizedBox(
-              height: 48,
-              child: BusyButton(
-                key: const Key('sms-verify'),
-                label: 'Verify and sign in',
-                busy: loading,
-                onPressed: _verify,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Center(
-              child: _resendSeconds > 0
-                  ? Text('Resend code in ${_resendSeconds}s',
-                      style: context.text.bodySmall)
-                  : TextButton(
-                      key: const Key('sms-resend'),
-                      onPressed: loading ? null : _sendCode,
-                      child: const Text('Resend code'),
+      child: !smsSignInAvailable
+          ? const FormErrorBanner(
+              key: Key('sms-unavailable'),
+              message: 'Sign-in codes are not available on this server. '
+                  'Sign in with your password, or ask an admin to reset it.',
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _StepIndicator(step: _codeSent ? 1 : 0),
+                const SizedBox(height: AppSpacing.lg),
+                if (!_codeSent) ...[
+                  TextField(
+                    key: const Key('sms-phone'),
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    onSubmitted: (_) => _sendCode(),
+                    decoration: const InputDecoration(
+                      labelText: 'Phone number',
+                      prefixIcon: Icon(Icons.phone_outlined, size: 20),
                     ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    height: 48,
+                    child: BusyButton(
+                      key: const Key('sms-send'),
+                      label: 'Send code',
+                      busy: loading,
+                      onPressed: _sendCode,
+                    ),
+                  ),
+                ] else ...[
+                  OtpInput(
+                    controller: _code,
+                    focusNode: _codeFocus,
+                    onCompleted: (_) => _verify(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    height: 48,
+                    child: BusyButton(
+                      key: const Key('sms-verify'),
+                      label: 'Verify and sign in',
+                      busy: loading,
+                      onPressed: _verify,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Center(
+                    child: _resendSeconds > 0
+                        ? Text('Resend code in ${_resendSeconds}s',
+                            style: context.text.bodySmall)
+                        : TextButton(
+                            key: const Key('sms-resend'),
+                            onPressed: loading ? null : _sendCode,
+                            child: const Text('Resend code'),
+                          ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
-      ),
     );
   }
 }

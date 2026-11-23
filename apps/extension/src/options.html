@@ -58,7 +58,24 @@
       </section>
 
       <section class="card">
-        <h2>3. Sync status</h2>
+        <h2>3. Monitored sites</h2>
+        <p class="hint">
+          Integrity Lens only runs on these LMS origins, and only pages on them can attach
+          a session to an assignment. One origin per line, for example
+          <code>https://lms.school.edu</code>. Leave empty to use your API origin.
+        </p>
+        <div class="row">
+          <label for="allowed-origins">Allowed origins</label>
+          <textarea id="allowed-origins" rows="3" spellcheck="false"></textarea>
+        </div>
+        <div class="actions">
+          <button id="save-origins" type="button" class="ghost">Save sites</button>
+        </div>
+        <p id="origins-status" class="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>4. Sync status</h2>
         <dl class="stats">
           <div><dt>Pending batches</dt><dd id="stat-pending">–</dd></div>
           <div><dt>Queued events</dt><dd id="stat-events">–</dd></div>
@@ -70,6 +87,6 @@
         </div>
       </section>
     </main>
-    <script src="options.js"></script>
+    <script type="module" src="options.js"></script>
   </body>
 </html>

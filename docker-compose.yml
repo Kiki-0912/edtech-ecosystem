@@ -27,7 +27,10 @@ services:
       - PORT=4000
       - HOST=0.0.0.0
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
-      - AUTH_SECRET=${AUTH_SECRET:-edtech-dev-secret-change-me}
+      # Not `:?`: compose interpolates the whole file, so a required variable here would
+      # break `npm run db:up` (db only). Blank is still refused: NODE_ENV=production makes
+      # the API exit with "Refusing to start: AUTH_SECRET must be set".
+      - AUTH_SECRET=${AUTH_SECRET:-}
       - DATABASE_URL=postgresql://edtech:${POSTGRES_PASSWORD:-edtech}@db:5432/edtech
       - SEED_DEMO_DATA=${SEED_DEMO_DATA:-true}
     depends_on:

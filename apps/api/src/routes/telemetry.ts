@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type {
   ApiError,
+  EffortScore,
   IntegrityReport,
   SignedTelemetryBatch,
   TelemetryEvent,
@@ -14,6 +15,8 @@ import {
   getIntegrityFlags,
   getSubmission,
   getSubmissionsByAssignment,
+  getTelemetryBatch,
+  getTelemetryBatchesFor,
   hasTelemetryBatch,
   getUser,
   setEffortScore,
@@ -32,6 +35,41 @@ const fail = (
   code: string,
   message: string,
 ) => reply.code(statusCode).send({ error: { code, message } } satisfies ApiError);
+
+/** effort_scores is keyed by session_id alone and the session id is chosen by
+ *  the client, so rows are stored as `<studentId>:<sessionId>`: one student can
+ *  never overwrite another's row by reusing their session id. */
+export function effortRowKey(studentId: string, sessionId: string): string {
+  return `${studentId}:${sessionId}`;
+}
+
+/** The client-facing session id of a stored score (legacy rows have no prefix). */
+export function publicSessionId(studentId: string, stored: string): string {
+  const prefix = `${studentId}:`;
+  return stored.startsWith(prefix) ? stored.slice(prefix.length) : stored;
+}
+
+/** Every event of a student + assignment across stored batches, once per batchId. */
+function eventsFor(
+  batches: SignedTelemetryBatch[],
+  studentId: string,
+  assignmentId: string,
+): TelemetryEvent[] {
+  const seen = new Set<string>();
+  const events: TelemetryEvent[] = [];
+  for (const stored of batches) {
+    if (
+      stored.studentId !== studentId ||
+      stored.assignmentId !== assignmentId ||
+      seen.has(stored.batchId)
+    ) {
+      continue;
+    }
+    seen.add(stored.batchId);
+    events.push(...stored.events);
+  }
+  return events;
+}
 
 /** Reconstruct the exact canonical JSON the extension signs over. Key order
  *  must match the client (batchId, studentId, assignmentId, createdAt, events). */
@@ -123,12 +161,14 @@ export async function telemetryRoutes(app: FastifyInstance) {
         );
       }
 
-      // ---- Signature verification (new hardening step) ----
+      // ---- Signature verification ----
+      // 400, not 401: a bad signature is a malformed batch, and the extension
+      // treats 401 as "sign in again", which would never fix it.
       const sigCheck = verifyBatchSignature(batch);
       if (!sigCheck.ok) {
         return fail(
           reply,
-          401,
+          400,
           "INVALID_SIGNATURE",
           `Telemetry batch signature invalid: ${sigCheck.reason}`,
         );
@@ -146,6 +186,8 @@ export async function telemetryRoutes(app: FastifyInstance) {
 
       const inconsistent = batch.events.some(
         (event) =>
+          !event ||
+          typeof event.sessionId !== "string" ||
           event.assignmentId !== batch.assignmentId ||
           event.studentId !== batch.studentId,
       );
@@ -158,32 +200,67 @@ export async function telemetryRoutes(app: FastifyInstance) {
         );
       }
 
-      const metrics = computeEffortMetrics(batch.events);
-      const sessionId = batch.events.at(-1)?.sessionId ?? batch.batchId;
-      const score = buildEffortScore(
-        sessionId,
+      const sessionId = batch.events.at(-1)!.sessionId;
+      const replayed = await getTelemetryBatch(batch.batchId);
+      if (replayed && replayed.studentId !== batch.studentId) {
+        return fail(reply, 409, "BATCH_CONFLICT", "This batch id is already in use");
+      }
+
+      if (!replayed) {
+        await createTelemetryBatch(batch);
+      }
+
+      // Score from everything stored for this student + assignment (re-read
+      // after the insert so concurrent uploads are included), never from the
+      // latest batch alone. A replay changes nothing, so it writes nothing.
+      const pairEvents = eventsFor(
+        await getTelemetryBatchesFor(batch.studentId, batch.assignmentId),
         batch.studentId,
         batch.assignmentId,
-        metrics,
       );
-      const flags = computeIntegrityFlags(metrics);
+      const sessionScores = new Map<string, EffortScore>();
+      const touched = replayed
+        ? [sessionId]
+        : [...new Set(batch.events.map((event) => event.sessionId))];
+      for (const id of touched) {
+        sessionScores.set(
+          id,
+          buildEffortScore(
+            id,
+            batch.studentId,
+            batch.assignmentId,
+            computeEffortMetrics(pairEvents.filter((event) => event.sessionId === id)),
+          ),
+        );
+      }
+      const score = sessionScores.get(sessionId)!;
 
-      await createTelemetryBatch(batch);
-      await setEffortScore(score);
-      await setIntegrityFlags(batch.studentId, batch.assignmentId, flags);
+      if (!replayed) {
+        for (const [id, sessionScore] of sessionScores) {
+          await setEffortScore({
+            ...sessionScore,
+            sessionId: effortRowKey(batch.studentId, id),
+          });
+        }
+        await setIntegrityFlags(
+          batch.studentId,
+          batch.assignmentId,
+          computeIntegrityFlags(computeEffortMetrics(pairEvents)),
+        );
 
-      const existing = await getSubmissionsByAssignment(batch.assignmentId);
-      const submission = existing.find(
-        (entry) => entry.studentId === batch.studentId,
-      );
-      if (submission) {
-        await updateSubmission(submission.id, { effortScore: score.score });
+        const existing = await getSubmissionsByAssignment(batch.assignmentId);
+        const submission = existing.find(
+          (entry) => entry.studentId === batch.studentId,
+        );
+        if (submission) {
+          await updateSubmission(submission.id, { effortScore: score.score });
+        }
       }
 
       return reply.code(202).send({
         data: {
           batchId: batch.batchId,
-          acceptedEvents: batch.events.length,
+          acceptedEvents: replayed ? 0 : batch.events.length,
           effortScore: score,
         },
       });
@@ -234,7 +311,7 @@ export async function telemetryRoutes(app: FastifyInstance) {
         submissionId: submission?.id ?? null,
         assignmentId,
         studentId,
-        effortScore: score,
+        effortScore: { ...score, sessionId: publicSessionId(studentId, score.sessionId) },
         flags: await getIntegrityFlags(studentId, assignmentId),
         replayAvailable: await hasTelemetryBatch(studentId, assignmentId),
         generatedAt: new Date().toISOString(),
