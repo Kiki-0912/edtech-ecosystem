@@ -80,6 +80,50 @@ export function effectiveOrigins(settings) {
   return parseOrigins([normalizeBaseUrl(settings?.apiBaseUrl ?? DEFAULT_API_BASE_URL)]);
 }
 
+/**
+ * Stable key for "the same document", used to remember which assignment a
+ * student linked to it: Google Docs/Sheets/Slides/Forms by file id (so /edit,
+ * /view and account switches map to one key), anything else by origin + path.
+ */
+export function documentKey(url) {
+  try {
+    const parsed = new URL(String(url ?? ""));
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      return null;
+    }
+    const google = parsed.pathname.match(
+      /^\/(document|spreadsheets|presentation|forms)\/(?:u\/\d+\/)?d\/([^/]+)/,
+    );
+    if (google) {
+      return `${parsed.origin}/${google[1]}/d/${google[2]}`;
+    }
+    return `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Which assignment a tab's telemetry belongs to. A link the student picked in
+ * the popup wins, then an assignmentId the page itself provides; leaving a
+ * linked document drops its assignment. Unmonitored sites never get one.
+ */
+export function resolveAssignment({ monitored, link, pageAssignmentId, docKey, session }) {
+  if (!monitored) {
+    return { assignmentId: null, linkedDocKey: null };
+  }
+  if (link?.assignmentId) {
+    return { assignmentId: link.assignmentId, linkedDocKey: docKey };
+  }
+  if (typeof pageAssignmentId === "string" && pageAssignmentId && pageAssignmentId !== "unassigned") {
+    return { assignmentId: pageAssignmentId, linkedDocKey: null };
+  }
+  if (session?.linkedDocKey && session.linkedDocKey !== docKey) {
+    return { assignmentId: null, linkedDocKey: null };
+  }
+  return { assignmentId: session?.assignmentId ?? null, linkedDocKey: session?.linkedDocKey ?? null };
+}
+
 /** Only pages on an exact configured origin may attach sessions to assignments. */
 export function isMonitoredUrl(url, origins) {
   const origin = normalizeOrigin(url);

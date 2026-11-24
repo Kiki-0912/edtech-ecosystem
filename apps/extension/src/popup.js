@@ -15,7 +15,15 @@ const elements = {
   openSettings: document.getElementById("open-settings"),
   settingsLink: document.getElementById("settings-link"),
   syncStatus: document.getElementById("sync-status"),
+  pickerRow: document.getElementById("picker-row"),
+  picker: document.getElementById("assignment-picker"),
+  pickerHint: document.getElementById("picker-hint"),
 };
+
+// Assignment list is fetched once per popup opening; the picker must not be
+// rebuilt by the 1s refresh while the student is choosing.
+let assignments = null;
+let assignmentsLoading = false;
 
 let currentTabId = null;
 
@@ -63,7 +71,7 @@ function render(session, tab) {
   const active = Date.now() - session.lastActiveAt < 60_000;
   elements.statusDot.classList.toggle("active", active);
   elements.assignment.textContent = session.assignmentId
-    ? `Assignment: ${session.assignmentId}`
+    ? `Assignment: ${assignmentLabel(session.assignmentId)}`
     : "No assignment detected";
   elements.score.textContent = String(session.score);
   elements.meter.style.width = `${Math.max(0, Math.min(100, session.score))}%`;
@@ -74,6 +82,64 @@ function render(session, tab) {
   elements.pasteVolume.textContent = String(session.pasteVolume);
   elements.aiSwitches.textContent = String(session.aiTabSwitches);
   elements.activeTime.textContent = `${session.activeSeconds}s active`;
+}
+
+function assignmentLabel(id) {
+  const match = assignments?.find((assignment) => assignment.id === id);
+  return match ? `${match.title} (${match.courseCode})` : id;
+}
+
+function showHint(text) {
+  elements.pickerHint.textContent = text;
+  elements.pickerHint.classList.toggle("hidden", !text);
+}
+
+async function loadAssignments() {
+  if (assignments || assignmentsLoading) {
+    return;
+  }
+  assignmentsLoading = true;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "list-assignments" });
+    if (response?.ok) {
+      assignments = response.assignments;
+      for (const assignment of assignments) {
+        const option = document.createElement("option");
+        option.value = assignment.id;
+        option.textContent = `${assignment.title} (${assignment.courseCode})`;
+        elements.picker.append(option);
+      }
+    } else {
+      showHint("Couldn't load your assignments. Check the connection in Settings.");
+    }
+  } finally {
+    assignmentsLoading = false;
+  }
+}
+
+/** Picker for linking the open document to an assignment (e.g. a Google Doc). */
+function renderPicker(info) {
+  if (!info?.loggedIn) {
+    elements.pickerRow.classList.add("hidden");
+    showHint("Sign in via Settings to link this document to an assignment.");
+    return;
+  }
+  if (!info.monitored) {
+    elements.pickerRow.classList.add("hidden");
+    showHint("This site isn't monitored. Add it under Settings \u2192 3 to link it to an assignment.");
+    return;
+  }
+  elements.pickerRow.classList.remove("hidden");
+  showHint(
+    info.link
+      ? ""
+      : "Pick the assignment you're writing here. It's remembered for this document.",
+  );
+  loadAssignments().then(() => {
+    if (document.activeElement !== elements.picker) {
+      elements.picker.value = info.link?.assignmentId ?? info.session?.assignmentId ?? "";
+    }
+  });
 }
 
 function openSettings() {
@@ -124,7 +190,31 @@ async function refresh() {
     tabId: currentTabId,
   });
   render(response?.session ?? null, tab);
+  renderPicker(response);
 }
+
+elements.picker.addEventListener("change", async () => {
+  if (currentTabId === null) {
+    return;
+  }
+  const id = elements.picker.value || null;
+  const title = id ? elements.picker.selectedOptions[0]?.textContent : null;
+  const result = await chrome.runtime.sendMessage({
+    type: "set-assignment",
+    tabId: currentTabId,
+    assignmentId: id,
+    title,
+  });
+  if (!result?.ok) {
+    showHint(
+      result?.reason === "site-not-allowed"
+        ? "This site isn't monitored. Add it under Settings \u2192 3 first."
+        : "Couldn't save the link. Try again.",
+    );
+  }
+  elements.picker.blur();
+  await refresh();
+});
 
 elements.openSettings.addEventListener("click", openSettings);
 elements.settingsLink.addEventListener("click", (event) => {

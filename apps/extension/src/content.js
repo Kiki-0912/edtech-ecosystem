@@ -81,65 +81,108 @@
     }
   }
 
-  window.addEventListener(
-    "keydown",
-    (event) => {
-      if (event.isComposing || MODIFIER_KEYS.has(event.key) || isSensitiveEvent(event)) {
-        return;
+  // Each document is captured once: by its own copy of this script, or by a
+  // parent frame's copy for same-origin about:blank frames (Google Docs types
+  // into one) where the browser may not inject scripts. A DOM marker, visible
+  // to every copy, prevents double counting.
+  const CAPTURE_MARK = "data-integrity-lens";
+
+  function claim(doc) {
+    const root = doc?.documentElement;
+    if (!root || root.hasAttribute(CAPTURE_MARK)) {
+      return false;
+    }
+    root.setAttribute(CAPTURE_MARK, "");
+    return true;
+  }
+
+  function attach(win) {
+    win.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.isComposing || MODIFIER_KEYS.has(event.key) || isSensitiveEvent(event)) {
+          return;
+        }
+
+        const now = performance.now();
+        const deltaMs = lastKeyAt === 0 ? 0 : Math.round(now - lastKeyAt);
+        lastKeyAt = now;
+        enqueue("keystroke", { deltaMs });
+      },
+      true,
+    );
+
+    win.addEventListener(
+      "paste",
+      (event) => {
+        if (isSensitiveEvent(event)) {
+          return;
+        }
+
+        const text = event.clipboardData?.getData("text") ?? "";
+        enqueue("paste", { characterCount: text.length });
+      },
+      true,
+    );
+
+    win.addEventListener(
+      "mousemove",
+      (event) => {
+        if (!consentEnabled) {
+          return;
+        }
+        if (isSensitiveEvent(event)) {
+          // Forget the last point so no distance is measured across the region.
+          lastCursorX = null;
+          lastCursorY = null;
+          return;
+        }
+
+        const now = performance.now();
+        if (now - lastCursorAt < CURSOR_SAMPLE_MS) {
+          return;
+        }
+
+        if (lastCursorX !== null && lastCursorY !== null) {
+          const distance = Math.round(
+            Math.hypot(event.clientX - lastCursorX, event.clientY - lastCursorY),
+          );
+          enqueue("cursor", { distancePx: distance });
+        }
+
+        lastCursorAt = now;
+        lastCursorX = event.clientX;
+        lastCursorY = event.clientY;
+      },
+      { capture: true, passive: true },
+    );
+  }
+
+  /** Capture same-origin child frames that have no script of their own. */
+  function attachFrames(doc) {
+    for (const frame of doc.querySelectorAll("iframe, frame")) {
+      try {
+        const childDoc = frame.contentDocument;
+        if (childDoc && claim(childDoc)) {
+          attach(frame.contentWindow);
+          attachFrames(childDoc);
+        }
+      } catch {
+        // Cross-origin frame: not ours to read.
       }
+    }
+  }
 
-      const now = performance.now();
-      const deltaMs = lastKeyAt === 0 ? 0 : Math.round(now - lastKeyAt);
-      lastKeyAt = now;
-      enqueue("keystroke", { deltaMs });
-    },
-    true,
-  );
-
-  window.addEventListener(
-    "paste",
-    (event) => {
-      if (isSensitiveEvent(event)) {
-        return;
-      }
-
-      const text = event.clipboardData?.getData("text") ?? "";
-      enqueue("paste", { characterCount: text.length });
-    },
-    true,
-  );
-
-  window.addEventListener(
-    "mousemove",
-    (event) => {
-      if (!consentEnabled) {
-        return;
-      }
-      if (isSensitiveEvent(event)) {
-        // Forget the last point so no distance is measured across the region.
-        lastCursorX = null;
-        lastCursorY = null;
-        return;
-      }
-
-      const now = performance.now();
-      if (now - lastCursorAt < CURSOR_SAMPLE_MS) {
-        return;
-      }
-
-      if (lastCursorX !== null && lastCursorY !== null) {
-        const distance = Math.round(
-          Math.hypot(event.clientX - lastCursorX, event.clientY - lastCursorY),
-        );
-        enqueue("cursor", { distancePx: distance });
-      }
-
-      lastCursorAt = now;
-      lastCursorX = event.clientX;
-      lastCursorY = event.clientY;
-    },
-    { capture: true, passive: true },
-  );
+  if (claim(document)) {
+    attach(window);
+  }
+  attachFrames(document);
+  new MutationObserver(() => attachFrames(document)).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+  // A frame's blank document can be replaced after load; re-check periodically.
+  setInterval(() => attachFrames(document), 3000);
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {

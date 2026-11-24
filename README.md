@@ -98,6 +98,14 @@ marked with `data-sensitive`, are ignored. Sessions are stored per tab in
 Supported AI hosts: `chatgpt.com`, `chat.openai.com`, `claude.ai`,
 `gemini.google.com`, `copilot.microsoft.com`, `perplexity.ai`.
 
+#### Monitoring Google Docs (or any allowed site)
+
+1. In the extension settings (section 3), add the site, e.g. `https://docs.google.com`, and allow access when the browser asks.
+2. Open the document, click the Integrity Lens icon and pick the assignment under **This document is for**. The link is remembered per document (Google Docs/Sheets/Slides by file id).
+3. Write as usual. Typing in editors that use inner frames (Google Docs) is captured; only timing and counts are recorded, never content.
+
+A page can still name its assignment itself with `?assignmentId=` or `<meta name="edtech-assignment-id">`; a link picked in the popup takes precedence.
+
 ### 3. Flutter app (`apps/app`)
 
 Cross-platform client (phone, tablet, desktop/web) built on a shared design

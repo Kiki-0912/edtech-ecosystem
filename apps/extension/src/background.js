@@ -15,6 +15,7 @@ import {
   classifyUploadResponse,
   computeScore,
   createLock,
+  documentKey,
   effectiveOrigins,
   emptySession,
   generateSigningJwk,
@@ -27,6 +28,7 @@ import {
   normalizeBaseUrl,
   originMatchPattern,
   queueStats,
+  resolveAssignment,
   retryDelayMs,
   sanitizeContentEvents,
   signBatch,
@@ -42,6 +44,8 @@ const INSTALL_KEY = "installKey";
 
 // chrome.storage.sync holds user-facing settings so they roam with the profile.
 const SETTINGS_KEY = "settings";
+// Assignments a student linked to documents from the popup, keyed by documentKey().
+const ASSIGNMENT_LINKS_KEY = "assignmentLinks";
 
 const RECENT_WINDOW_MS = 30 * 60 * 1000;
 const MAX_PENDING_BATCHES = 200;
@@ -90,6 +94,20 @@ async function getAuth() {
     studentId: typeof auth.studentId === "string" ? auth.studentId : null,
     studentName: typeof auth.studentName === "string" ? auth.studentName : null,
   };
+}
+
+async function loadAssignmentLinks() {
+  const stored = await chrome.storage.local.get(ASSIGNMENT_LINKS_KEY);
+  return stored[ASSIGNMENT_LINKS_KEY] ?? {};
+}
+
+/** The signed-in student's assignment link for a document, if any. */
+async function linkFor(docKey, studentId) {
+  if (!docKey || !studentId) {
+    return null;
+  }
+  const link = (await loadAssignmentLinks())[docKey];
+  return link && link.ownerId === studentId ? link : null;
 }
 
 async function loadPendingEvents() {
@@ -161,21 +179,24 @@ async function handleTelemetry(message, sender) {
     const sessions = await loadSessions();
     const session = sessions[tabId] ?? emptySession(tabId, tabUrl);
     session.url = tabUrl || session.url;
-    if (typeof message.sessionId === "string" && message.sessionId) {
+    // Pages like Google Docs take keystrokes in inner frames, which run their
+    // own copy of the capture script; only the top frame names the session.
+    if (sender.frameId === 0 && typeof message.sessionId === "string" && message.sessionId) {
       session.sessionId = message.sessionId;
     }
 
-    // Only a configured LMS origin may attach a session to an assignment;
-    // anything else stays local and is never uploaded.
-    if (!isMonitoredUrl(session.url, origins)) {
-      session.assignmentId = null;
-    } else if (
-      typeof message.assignmentId === "string" &&
-      message.assignmentId &&
-      message.assignmentId !== "unassigned"
-    ) {
-      session.assignmentId = message.assignmentId;
-    }
+    // Only a configured origin may attach a session to an assignment; anything
+    // else stays local and is never uploaded.
+    const docKey = documentKey(session.url);
+    const resolved = resolveAssignment({
+      monitored: isMonitoredUrl(session.url, origins),
+      link: await linkFor(docKey, auth.studentId),
+      pageAssignmentId: sender.frameId === 0 ? message.assignmentId : null,
+      docKey,
+      session,
+    });
+    session.assignmentId = resolved.assignmentId;
+    session.linkedDocKey = resolved.linkedDocKey;
 
     applyEvents(session, events);
     sessions[tabId] = session;
@@ -396,16 +417,120 @@ function syncContentScripts() {
     if (matches.length === 0) {
       return;
     }
-    await chrome.scripting.registerContentScripts([
-      {
-        id: CONTENT_SCRIPT_ID,
-        matches,
-        // privacy.js defines the sensitive-target filter content.js relies on.
-        js: ["src/privacy.js", "src/content.js"],
-        runAt: "document_idle",
-        persistAcrossSessions: true,
-      },
-    ]);
+    const script = {
+      id: CONTENT_SCRIPT_ID,
+      matches,
+      // privacy.js defines the sensitive-target filter content.js relies on.
+      js: ["src/privacy.js", "src/content.js"],
+      runAt: "document_idle",
+      persistAcrossSessions: true,
+      // Editors such as Google Docs receive typing in (about:blank) inner frames.
+      allFrames: true,
+      matchOriginAsFallback: true,
+    };
+    try {
+      await chrome.scripting.registerContentScripts([script]);
+    } catch {
+      // Browsers without matchOriginAsFallback still get same-origin frames.
+      delete script.matchOriginAsFallback;
+      await chrome.scripting.registerContentScripts([script]);
+    }
+  });
+}
+
+/* ---------- popup: per-document assignment links ---------- */
+
+/** Session, monitoring state and assignment link for the popup's tab. */
+async function describeTab(tabId) {
+  const [sessions, settings, auth, tab] = await Promise.all([
+    loadSessions(),
+    getSettings(),
+    getAuth(),
+    chrome.tabs.get(tabId).catch(() => null),
+  ]);
+  const url = tab?.url ?? "";
+  const link = await linkFor(documentKey(url), auth.studentId);
+  return {
+    session: sessions[tabId] ?? null,
+    monitored: isMonitoredUrl(url, effectiveOrigins(settings)),
+    loggedIn: Boolean(auth.token),
+    link,
+  };
+}
+
+/** Open assignments in the signed-in student's courses, for the popup picker. */
+async function listMyAssignments() {
+  const [settings, auth] = await Promise.all([getSettings(), getAuth()]);
+  if (!auth.token || !auth.studentId) {
+    return { ok: false, reason: "signed-out" };
+  }
+  const get = async (path) => {
+    const response = await fetch(`${settings.apiBaseUrl}/api/v1${path}`, {
+      headers: { Authorization: `Bearer ${auth.token}` },
+    });
+    if (!response.ok) {
+      throw new Error(String(response.status));
+    }
+    return (await response.json()).data;
+  };
+  const courses = (await get("/courses")).filter((course) =>
+    Array.isArray(course.studentIds) && course.studentIds.includes(auth.studentId),
+  );
+  const assignments = [];
+  for (const course of courses) {
+    for (const assignment of await get(`/courses/${encodeURIComponent(course.id)}/assignments`)) {
+      if (assignment.status === "draft") {
+        continue;
+      }
+      assignments.push({
+        id: assignment.id,
+        title: assignment.title,
+        status: assignment.status,
+        dueAt: assignment.dueAt,
+        courseCode: course.code,
+      });
+    }
+  }
+  return { ok: true, assignments };
+}
+
+/** Link (or unlink, with a null id) the document open in a tab to an assignment. */
+async function setAssignmentLink(tabId, assignmentId, title) {
+  const [settings, auth, tab] = await Promise.all([
+    getSettings(),
+    getAuth(),
+    chrome.tabs.get(tabId),
+  ]);
+  if (!auth.studentId) {
+    return { ok: false, reason: "signed-out" };
+  }
+  const url = tab?.url ?? "";
+  const docKey = documentKey(url);
+  if (!docKey || !isMonitoredUrl(url, effectiveOrigins(settings))) {
+    return { ok: false, reason: "site-not-allowed" };
+  }
+
+  return withLock(async () => {
+    const links = await loadAssignmentLinks();
+    if (typeof assignmentId === "string" && assignmentId) {
+      links[docKey] = {
+        assignmentId,
+        title: typeof title === "string" ? title.slice(0, 200) : assignmentId,
+        ownerId: auth.studentId,
+      };
+    } else {
+      delete links[docKey];
+    }
+    await chrome.storage.local.set({ [ASSIGNMENT_LINKS_KEY]: links });
+
+    const sessions = await loadSessions();
+    const session = sessions[tabId] ?? emptySession(tabId, url);
+    session.url = url;
+    session.assignmentId = links[docKey]?.assignmentId ?? null;
+    session.linkedDocKey = links[docKey] ? docKey : null;
+    sessions[tabId] = session;
+    await saveSessions(sessions);
+    return { ok: true };
   });
 }
 
@@ -441,7 +566,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message?.type === "get-session") {
-    loadSessions().then((sessions) => sendResponse({ session: sessions[message.tabId] ?? null }));
+    describeTab(message.tabId)
+      .then(sendResponse)
+      .catch(() => sendResponse({ session: null }));
+    return true;
+  }
+
+  if (message?.type === "list-assignments") {
+    listMyAssignments()
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, reason: "network" }));
+    return true;
+  }
+
+  if (message?.type === "set-assignment") {
+    setAssignmentLink(message.tabId, message.assignmentId, message.title)
+      .then(sendResponse)
+      .catch(() => sendResponse({ ok: false, reason: "error" }));
     return true;
   }
 
