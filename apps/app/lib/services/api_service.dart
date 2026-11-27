@@ -29,6 +29,19 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Case-insensitive A→Z order for name lists, so new entries appear in place
+/// instead of at the end (the API returns insertion order).
+int _compareNames(String a, String b) {
+  final byName = a.toLowerCase().compareTo(b.toLowerCase());
+  return byName != 0 ? byName : a.compareTo(b);
+}
+
+List<Map<String, dynamic>> _sortedByName(List<Map<String, dynamic>> items) {
+  String label(Map<String, dynamic> item) =>
+      (item['displayName'] ?? item['name'] ?? item['code'] ?? '').toString();
+  return items..sort((a, b) => _compareNames(label(a), label(b)));
+}
+
 class ApiService {
   ApiService._internal();
   static final ApiService instance = ApiService._internal();
@@ -194,8 +207,8 @@ class ApiService {
         )
         .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(
-        jsonDecode(response.body)['data'] as List<dynamic>);
+    return _sortedByName(List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>));
   }
 
   Future<Map<String, dynamic>> getStudent(String studentId) async {
@@ -490,8 +503,8 @@ class ApiService {
         )
         .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(
-        jsonDecode(response.body)['data'] as List<dynamic>);
+    return _sortedByName(List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>));
   }
 
   Future<Map<String, dynamic>> createDepartment({
@@ -559,8 +572,8 @@ class ApiService {
         )
         .timeout(const Duration(seconds: 8));
     _throwOnError(response);
-    return List<Map<String, dynamic>>.from(
-        jsonDecode(response.body)['data'] as List<dynamic>);
+    return _sortedByName(List<Map<String, dynamic>>.from(
+        jsonDecode(response.body)['data'] as List<dynamic>));
   }
 
   /* ============================================

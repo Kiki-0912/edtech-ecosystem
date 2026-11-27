@@ -42,7 +42,9 @@ class _CoursesScreenState extends State<CoursesScreen> {
     try {
       final results = await Future.wait([api.getCourses(), api.getCollege()]);
       final all = results[0] as List<Course>;
-      final courses = user == null ? all : myCourses(user, all);
+      final courses = (user == null ? all : myCourses(user, all))
+        ..sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
       final assignments = await Future.wait(courses.map(
           (c) => api.getAssignments(c.id).catchError((_) => <Assignment>[])));
       final now = DateTime.now();

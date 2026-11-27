@@ -48,7 +48,8 @@ class _StudentsScreenState extends State<StudentsScreen> {
         students =
             students.where((s) => _courseIds(s).any(ids.contains)).toList();
       }
-      students.sort((a, b) => _name(a).compareTo(_name(b)));
+      students.sort(
+          (a, b) => _name(a).toLowerCase().compareTo(_name(b).toLowerCase()));
       if (!mounted) return;
       setState(() {
         _students = students;
