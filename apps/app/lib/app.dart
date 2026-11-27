@@ -48,7 +48,7 @@ class _EdTechAppState extends State<EdTechApp> {
     final theme = context.watch<ThemeController>();
     return MaterialApp.router(
       routerConfig: _router,
-      title: 'EdTech',
+      title: 'Edu-tech Ecosystem',
       debugShowCheckedModeBanner: false,
       theme: lightTheme,
       darkTheme: darkTheme,

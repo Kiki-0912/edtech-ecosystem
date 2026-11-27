@@ -3,7 +3,7 @@
          explicitly (debug/profile manifests add it only for tooling). -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="edtech_app"
+        android:label="Edu-tech"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

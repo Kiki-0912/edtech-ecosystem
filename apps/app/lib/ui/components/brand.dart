@@ -35,7 +35,7 @@ class BrandMark extends StatelessWidget {
       children: [
         mark,
         const SizedBox(width: AppSpacing.sm),
-        Text('EdTech', style: context.text.titleLarge),
+        Text('Edu-tech', style: context.text.titleLarge),
       ],
     );
   }
