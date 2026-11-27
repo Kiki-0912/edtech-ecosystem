@@ -57,16 +57,16 @@ fs.writeFileSync(
   html,
   fs
     .readFileSync(html, "utf8")
-    .replace(/<title>[^<]*<\/title>/, "<title>EdTech Admin</title>")
+    .replace(/<title>[^<]*<\/title>/, "<title>Edu-tech Admin</title>")
     .replace(
       /(<meta name="apple-mobile-web-app-title" content=")[^"]*"/,
-      '$1EdTech Admin"',
+      '$1Edu-tech Admin"',
     ),
 );
 const manifestPath = path.join(dir, "manifest.json");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-manifest.name = "EdTech Admin";
-manifest.short_name = "EdTech Admin";
+manifest.name = "Edu-tech Admin";
+manifest.short_name = "Edu-tech Admin";
 fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 NODE
 

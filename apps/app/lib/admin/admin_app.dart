@@ -64,7 +64,7 @@ class _AdminAppState extends State<AdminApp> {
       value: _access,
       child: MaterialApp.router(
         routerConfig: _router,
-        title: 'EdTech Admin',
+        title: 'Edu-tech Admin',
         debugShowCheckedModeBanner: false,
         theme: lightTheme,
         darkTheme: darkTheme,
