@@ -28,7 +28,8 @@ class AuthLayout extends StatelessWidget {
 
     final form = ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 420),
-      child: Column(
+      child: FadeSlideIn(
+          child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -59,7 +60,7 @@ class AuthLayout extends StatelessWidget {
             footer!,
           ],
         ],
-      ),
+      )),
     );
 
     final formPane = Center(
@@ -92,37 +93,81 @@ class _BrandPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final onInk = c.onInk;
     return Container(
       margin: const EdgeInsets.all(AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: c.accentSoft,
-        borderRadius: AppRadius.lgAll,
+        color: c.ink,
+        borderRadius: AppRadius.xlAll,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
         children: [
-          const BrandMark(),
-          const Spacer(),
-          Text('Your classroom,\nall in one place.',
-              style: context.text.displaySmall),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Courses, attendance, schedules, chat and process-based integrity '
-            'insights for students, teachers and administrators.',
-            style: context.text.bodyLarge?.copyWith(color: c.textSecondary),
+          // A big soft orange glow rising from the corner: the one spark.
+          Positioned(
+            right: -160,
+            bottom: -160,
+            child: IgnorePointer(
+              child: Container(
+                width: 420,
+                height: 420,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      c.accent.withValues(alpha: 0.55),
+                      c.accent.withValues(alpha: 0),
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          const _Feature(
-              icon: Icons.fact_check_outlined,
-              text: 'Mark and review attendance in seconds'),
-          const _Feature(
-              icon: Icons.calendar_month_outlined,
-              text: 'Classes, quizzes and deadlines on one calendar'),
-          const _Feature(
-              icon: Icons.verified_user_outlined,
-              text: 'Effort insights that respect student privacy'),
-          const Spacer(),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                BrandMark(nameColor: onInk),
+                const Spacer(),
+                FadeSlideIn(
+                  delay: AppMotion.delayFor(1),
+                  child: Text('Your classroom,\nall in one place.',
+                      style: context.text.displaySmall?.copyWith(color: onInk)),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                FadeSlideIn(
+                  delay: AppMotion.delayFor(2),
+                  child: Text(
+                    'Courses, attendance, schedules, chat and process-based '
+                    'integrity insights for students, teachers and administrators.',
+                    style: context.text.bodyLarge
+                        ?.copyWith(color: onInk.withValues(alpha: 0.72)),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                FadeSlideIn(
+                  delay: AppMotion.delayFor(3),
+                  child: const _Feature(
+                      icon: Icons.fact_check_outlined,
+                      text: 'Mark and review attendance in seconds'),
+                ),
+                FadeSlideIn(
+                  delay: AppMotion.delayFor(4),
+                  child: const _Feature(
+                      icon: Icons.calendar_month_outlined,
+                      text: 'Classes, quizzes and deadlines on one calendar'),
+                ),
+                FadeSlideIn(
+                  delay: AppMotion.delayFor(5),
+                  child: const _Feature(
+                      icon: Icons.verified_user_outlined,
+                      text: 'Effort insights that respect student privacy'),
+                ),
+                const Spacer(),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -143,7 +188,10 @@ class _Feature extends StatelessWidget {
         children: [
           IconBadge(icon: icon, size: 36),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text(text, style: context.text.titleSmall)),
+          Expanded(
+              child: Text(text,
+                  style: context.text.titleSmall
+                      ?.copyWith(color: context.colors.onInk))),
         ],
       ),
     );

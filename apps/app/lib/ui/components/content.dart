@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:edtech_app/ui/motion.dart';
 import 'package:edtech_app/ui/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -21,7 +22,7 @@ class AppCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Material(
+    final card = Material(
       color: color ?? c.surface,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.lgAll,
@@ -30,9 +31,12 @@ class AppCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
+        hoverColor: c.inkSoft,
         child: Padding(padding: padding, child: child),
       ),
     );
+    // Only tappable cards get the press feel.
+    return onTap == null ? card : HoverLift(child: Pressable(child: card));
   }
 }
 
@@ -115,7 +119,7 @@ class StatTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value,
+                CountUpText(value,
                     style: context.text.headlineSmall,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
@@ -192,7 +196,9 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Container(
+    return AnimatedContainer(
+      duration: AppMotion.of(context, AppMotion.base),
+      curve: AppMotion.standard,
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.xs, vertical: AppSpacing.xxs / 2),
       decoration: BoxDecoration(
@@ -250,6 +256,7 @@ class ListRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       borderRadius: AppRadius.mdAll,
+      hoverColor: context.colors.inkSoft,
       child: Padding(
         padding: EdgeInsets.symmetric(
           horizontal: AppSpacing.xs,
@@ -352,8 +359,8 @@ class ProgressRing extends StatelessWidget {
       height: size,
       child: TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: value.clamp(0, 1)),
-        duration: const Duration(milliseconds: 700),
-        curve: Curves.easeOutCubic,
+        duration: AppMotion.of(context, const Duration(milliseconds: 800)),
+        curve: AppMotion.standard,
         builder: (context, v, _) => CustomPaint(
           painter: _RingPainter(
               value: v, color: color, track: c.surfaceMuted, stroke: stroke),
@@ -421,11 +428,16 @@ class ProgressBar extends StatelessWidget {
     final c = context.colors;
     return ClipRRect(
       borderRadius: AppRadius.pillAll,
-      child: LinearProgressIndicator(
-        value: value.clamp(0, 1),
-        minHeight: 6,
-        backgroundColor: c.surfaceMuted,
-        color: tone == Tone.accent ? c.accent : c.fg(tone),
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: value.clamp(0, 1).toDouble()),
+        duration: AppMotion.of(context, AppMotion.slow * 1.5),
+        curve: AppMotion.standard,
+        builder: (context, v, _) => LinearProgressIndicator(
+          value: v,
+          minHeight: 6,
+          backgroundColor: c.surfaceMuted,
+          color: tone == Tone.accent ? c.accent : c.fg(tone),
+        ),
       ),
     );
   }

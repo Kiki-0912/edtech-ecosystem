@@ -1,3 +1,7 @@
+import 'dart:math' as math;
+
+import 'package:edtech_app/ui/components/illustrations.dart';
+import 'package:edtech_app/ui/motion.dart';
 import 'package:edtech_app/ui/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -9,8 +13,11 @@ class EmptyState extends StatelessWidget {
     required this.title,
     this.message,
     this.action,
+    this.illustration,
   });
 
+  /// When set, a line drawing replaces the icon badge.
+  final IllustrationKind? illustration;
   final IconData icon;
   final String title;
   final String? message;
@@ -19,21 +26,33 @@ class EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Padding(
+    return FadeSlideIn(
+        child: Padding(
       padding: const EdgeInsets.symmetric(
           vertical: AppSpacing.xl, horizontal: AppSpacing.md),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: c.surfaceMuted,
-              shape: BoxShape.circle,
+          if (illustration != null)
+            LineIllustration(kind: illustration!)
+          else
+            // The icon pops in with a small overshoot, then rests.
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.6, end: 1),
+              duration: AppMotion.of(context, AppMotion.slow),
+              curve: AppMotion.pop,
+              builder: (context, scale, child) =>
+                  Transform.scale(scale: scale, child: child),
+              child: Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: c.accentSoft,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: c.accentText, size: 30),
+              ),
             ),
-            child: Icon(icon, color: c.textMuted, size: 28),
-          ),
           const SizedBox(height: AppSpacing.md),
           Text(title,
               style: context.text.titleMedium, textAlign: TextAlign.center),
@@ -48,7 +67,7 @@ class EmptyState extends StatelessWidget {
           ],
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -67,20 +86,13 @@ class ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     return Padding(
       padding: const EdgeInsets.symmetric(
           vertical: AppSpacing.xl, horizontal: AppSpacing.md),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration:
-                BoxDecoration(color: c.dangerSoft, shape: BoxShape.circle),
-            child: Icon(Icons.error_outline_rounded, color: c.danger, size: 28),
-          ),
+          const LineIllustration(kind: IllustrationKind.error, size: 88),
           const SizedBox(height: AppSpacing.md),
           Text(title,
               style: context.text.titleMedium, textAlign: TextAlign.center),
@@ -111,19 +123,29 @@ class FormErrorBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration:
-          BoxDecoration(color: c.dangerSoft, borderRadius: AppRadius.mdAll),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline_rounded, size: 20, color: c.danger),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(message,
-                style: context.text.bodyMedium?.copyWith(color: c.textPrimary)),
-          ),
-        ],
+    // A single quick shake as it appears, so errors are noticed but not nagging.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: AppMotion.of(context, AppMotion.slow),
+      builder: (context, t, child) => Transform.translate(
+        offset: Offset(math.sin(t * math.pi * 4) * 6 * (1 - t), 0),
+        child: child,
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        decoration:
+            BoxDecoration(color: c.dangerSoft, borderRadius: AppRadius.mdAll),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline_rounded, size: 20, color: c.danger),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(message,
+                  style:
+                      context.text.bodyMedium?.copyWith(color: c.textPrimary)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -146,8 +168,10 @@ String friendlyError(Object error) {
   return s;
 }
 
-/// Static placeholder block (no endless animation, so tests can settle).
-class Skeleton extends StatelessWidget {
+/// Placeholder block with a soft warm pulse. The pulse runs a handful of
+/// times and then rests, so a stuck load never animates forever and tests can
+/// settle.
+class Skeleton extends StatefulWidget {
   const Skeleton({
     super.key,
     this.width,
@@ -160,13 +184,46 @@ class Skeleton extends StatelessWidget {
   final double radius;
 
   @override
+  State<Skeleton> createState() => _SkeletonState();
+}
+
+class _SkeletonState extends State<Skeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (!AppMotion.reduced(context)) {
+      _controller.repeat(reverse: true, count: 6);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: context.colors.surfaceMuted,
-        borderRadius: BorderRadius.circular(radius),
+    final c = context.colors;
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Color.lerp(c.surfaceMuted, c.border,
+              Curves.easeInOut.transform(_controller.value)),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
       ),
     );
   }
@@ -256,7 +313,35 @@ void showToast(BuildContext context, String message,
     ..showSnackBar(SnackBar(
       content: Row(
         children: [
-          Icon(icon, color: iconColor, size: 20),
+          if (kind == ToastKind.success)
+            SizedBox.square(
+              dimension: 28,
+              child: Stack(
+                alignment: Alignment.center,
+                clipBehavior: Clip.none,
+                children: [
+                  const OverflowBox(
+                    maxWidth: 44,
+                    maxHeight: 44,
+                    child: SuccessBurst(size: 44),
+                  ),
+                  DecoratedBox(
+                    decoration:
+                        BoxDecoration(color: c.success, shape: BoxShape.circle),
+                    child: SizedBox.square(
+                      dimension: 22,
+                      child: Padding(
+                        padding: const EdgeInsets.all(3),
+                        child: AnimatedCheck(
+                            size: 16, color: c.surface, stroke: 2.4),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Icon(icon, color: iconColor, size: 20),
           const SizedBox(width: AppSpacing.sm),
           Expanded(child: Text(message)),
         ],

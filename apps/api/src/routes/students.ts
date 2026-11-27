@@ -14,6 +14,7 @@ import {
   setCourseStudents,
 } from '../store/db.js';
 import { authenticate } from '../middleware/auth.js';
+import { managesCourseId, readsCourseId, toSummary, visibleStudentIds } from '../middleware/scope.js';
 import { TEXT, bodySchema, rejectInvalidBody } from '../middleware/validation.js';
 import type { StudentSummary } from '@edtech/shared';
 
@@ -61,9 +62,10 @@ async function enrollInOnly(studentId: string, courseId: string): Promise<void> 
 }
 
 const studentsRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/v1/students - list all students (admin/teacher). A student gets
-  // only their classmates (students sharing a course), as names without
-  // contact details: enough for chat, and nobody's phone or email.
+  // GET /api/v1/students - every student for admins; teachers get the
+  // students on their own courses' rosters. A student gets only their
+  // classmates (students sharing a course), as names without contact
+  // details: enough for chat, and nobody's phone or email.
   fastify.get(
     '/students',
     { preHandler: [authenticate] },
@@ -72,7 +74,10 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
       const students = users.filter((u) => u.role === 'student');
       const caller = (request as AuthRequest).user;
       if (caller?.role !== 'student') {
-        return reply.send({ data: students });
+        const visible = await visibleStudentIds(caller);
+        return reply.send({
+          data: visible === 'all' ? students : students.filter((u) => visible.has(u.id)),
+        });
       }
       const mine = new Set(students.find((u) => u.id === caller.id)?.courseIds ?? []);
       const classmates: StudentSummary[] = students
@@ -82,7 +87,8 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GET /api/v1/students/:id - get a single student (staff, or a student's own record)
+  // GET /api/v1/students/:id - a single student: admins, the student's own
+  // teachers, or the student themselves
   fastify.get(
     '/students/:id',
     { preHandler: [authenticate] },
@@ -93,6 +99,12 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
         return reply
           .code(403)
           .send({ error: { code: 'FORBIDDEN', message: 'Students can only view their own record' } });
+      }
+      const visible = await visibleStudentIds(req.user);
+      if (visible !== 'all' && !visible.has(id)) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'This student is not on any of your courses' } });
       }
       const user = (await getUsers()).find((u) => u.id === id);
       if (!user || user.role !== 'student') {
@@ -234,14 +246,23 @@ const studentsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GET /api/v1/courses/:courseId/students - get students in a course
+  // GET /api/v1/courses/:courseId/students - students in a course. Admins
+  // and the course's teacher get full records; enrolled students get their
+  // classmates' names only; anyone else is refused.
   fastify.get(
     '/courses/:courseId/students',
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const students = await getStudentsByCourse((req.params as { courseId: string }).courseId);
-      return reply.send({ data: students });
+      const courseId = (req.params as { courseId: string }).courseId;
+      if (!(await readsCourseId(req.user, courseId))) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'You do not have access to this course' } });
+      }
+      const students = await getStudentsByCourse(courseId);
+      const full = await managesCourseId(req.user, courseId);
+      return reply.send({ data: full ? students : students.map(toSummary) });
     }
   );
 };

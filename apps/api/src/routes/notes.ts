@@ -6,6 +6,7 @@ import {
   deleteTeacherNote,
 } from '../store/db.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
+import { managesCourseId, readableCourseIds } from '../middleware/scope.js';
 import { TEXT, bodySchema, rejectInvalidBody } from '../middleware/validation.js';
 
 const NOTE_PROPERTIES = {
@@ -24,15 +25,19 @@ const UPDATE_NOTE_SCHEMA = { type: 'object', properties: NOTE_PROPERTIES };
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
 
 const notesRoutes: FastifyPluginAsync = async (fastify) => {
-  // GET /api/v1/notes - list teacher notes
+  // GET /api/v1/notes - list teacher notes for the courses the caller can read
+  // (admins: all; teachers: courses they teach; students: enrolled courses)
   // Query: courseId, courseCode
   fastify.get(
     '/notes',
     { preHandler: [authenticate] },
     async (request, reply) => {
+      const req = request as AuthRequest;
       const { courseId, courseCode } = request.query as { courseId?: string; courseCode?: string };
       const notes = await getTeacherNotes(courseId, courseCode);
-      return reply.send({ data: notes });
+      if (req.user?.role === 'admin') return reply.send({ data: notes });
+      const readable = await readableCourseIds(req.user);
+      return reply.send({ data: notes.filter((n) => readable.has(n.courseId)) });
     }
   );
 
@@ -45,6 +50,11 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
       const note = await getTeacherNote((req.params as { id: string }).id);
       if (!note) {
         return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Note not found' } });
+      }
+      if (req.user?.role !== 'admin' && !(await readableCourseIds(req.user)).has(note.courseId)) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'You do not have access to this course' } });
       }
       return reply.send({ data: note });
     }
@@ -66,6 +76,12 @@ const notesRoutes: FastifyPluginAsync = async (fastify) => {
         title: string;
         content?: string;
       };
+      // Teachers write notes only for courses they teach.
+      if (!(await managesCourseId(caller, body.courseId))) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'You can only add notes to courses you teach' } });
+      }
       const note = await upsertTeacherNote({
         courseId: body.courseId,
         bookName: body.bookName,

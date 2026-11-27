@@ -889,6 +889,10 @@ describe("deleting users", () => {
   test("a teacher who wrote course notes is in use", async () => {
     const phone = nextPhone();
     const teacher = await createUser({ role: "teacher", phone, password: "notes-pass-1" });
+    // Teachers only write notes for courses they teach: hand them c-001 for
+    // the note, then give it back.
+    const handOver = await admin("PATCH", "/courses/c-001", { teacherId: teacher.id });
+    assert.equal(handOver.statusCode, 200, handOver.body);
     const note = await app.inject({
       method: "POST",
       url: "/api/v1/notes",
@@ -896,6 +900,8 @@ describe("deleting users", () => {
       payload: { courseId: "c-001", bookName: "B", courseCode: "CS 301", title: "N", content: "" },
     });
     assert.equal(note.statusCode, 201, note.body);
+    const handBack = await admin("PATCH", "/courses/c-001", { teacherId: "u-teacher-1" });
+    assert.equal(handBack.statusCode, 200, handBack.body);
     expectError(await admin("DELETE", `/users/${teacher.id}`), 409, "USER_IN_USE");
     // Disabling is the alternative.
     const disabled = await admin("PATCH", `/users/${teacher.id}`, { isActive: false });

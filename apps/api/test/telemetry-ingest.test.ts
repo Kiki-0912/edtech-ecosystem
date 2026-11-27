@@ -12,6 +12,7 @@ import {
   generateSigningJwk,
   needsNewSigningKey,
   signBatch,
+  splitBatch,
 } from "../../extension/src/lib.js";
 
 // Seeded accounts (apps/api/src/store/memory.ts); password123 for all.
@@ -272,5 +273,45 @@ describe("ingestion reads only the uploading pair's batches", () => {
     // Scoring still covers only the pair: student 2's keystrokes are not counted.
     assert.equal(mine.res.json().data.effortScore.keystrokes, 3);
     assert.equal(theirs.res.json().data.effortScore.keystrokes, 4);
+  });
+});
+
+describe("large uploads", () => {
+  const post = (who: string, payload: unknown) =>
+    app.inject({ method: "POST", url: "/api/v1/telemetry/batches", headers: headers[who], payload });
+
+  test("a full 5,000-event backlog batch (over 1 MiB) is accepted", async () => {
+    // A real session id (a UUID, as the extension mints) makes this ~1.15 MB.
+    const sessionId = crypto.randomUUID();
+    const { res, batch } = await upload("student2", "u-student-2", "a-002", sessionId, keystrokes(5_000));
+    assert.ok(JSON.stringify(batch).length > 1024 * 1024, "the batch really is over 1 MiB");
+    assert.equal(res.statusCode, 202, res.body);
+    assert.equal(res.json().data.acceptedEvents, 5_000);
+  });
+
+  test("too many events is 413, which the extension splits and re-uploads", async () => {
+    const batch = buildBatch({
+      studentId: "u-student-2",
+      assignmentId: "a-002",
+      sessionId: "s-split",
+      events: keystrokes(5_001),
+    });
+    const res = await post("student2", await signBatch(batch, jwk));
+    assert.equal(res.statusCode, 413, res.body);
+    assert.equal(res.json().error.code, "BATCH_TOO_LARGE");
+    assert.equal(classifyUploadResponse(res.statusCode, res.json().error.code), "split");
+
+    const halves = splitBatch(batch);
+    assert.ok(halves);
+    for (const half of halves) {
+      const uploaded = await post("student2", await signBatch(half, jwk));
+      assert.equal(uploaded.statusCode, 202, uploaded.body);
+    }
+  });
+
+  test("a body over the route limit is 413 PAYLOAD_TOO_LARGE, not a generic error", async () => {
+    const res = await post("student2", { batchId: "x", padding: "x".repeat(5 * 1024 * 1024) });
+    assert.equal(res.statusCode, 413, res.body);
+    assert.equal(res.json().error.code, "PAYLOAD_TOO_LARGE");
   });
 });

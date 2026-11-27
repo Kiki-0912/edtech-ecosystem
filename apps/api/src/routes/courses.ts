@@ -14,7 +14,7 @@ import {
   getUsers,
   updateSubmission,
 } from "../store/db";
-import { callerOf, managesCourse } from "../middleware/scope";
+import { callerOf, managesCourse, readsCourseId, toSummary } from "../middleware/scope";
 
 const fail = (
   reply: FastifyReply,
@@ -41,7 +41,11 @@ export async function courseRoutes(app: FastifyInstance) {
     };
   });
 
-  app.get("/courses", async () => {
+  // The catalogue is open to every signed-in user, but only admins and the
+  // course's teacher see who is enrolled. Everyone else gets `studentIds`
+  // trimmed to themselves (so "am I enrolled?" still works) plus the count.
+  app.get("/courses", async (request) => {
+    const caller = callerOf(request);
     const courses = await getCourses();
     const users = await getUsers();
     return {
@@ -49,8 +53,12 @@ export async function courseRoutes(app: FastifyInstance) {
         courses.map(async (course) => {
           const teacher = users.find((u) => u.id === course.teacherId);
           const courseAssignments = await getAssignmentsByCourse(course.id);
+          const manages = managesCourse(caller, course);
           return {
             ...course,
+            studentIds: manages
+              ? course.studentIds
+              : course.studentIds.filter((id) => id === caller?.id),
             teacherName: teacher?.displayName ?? "Unassigned",
             studentCount: course.studentIds.length,
             openAssignmentCount: courseAssignments.filter(
@@ -69,19 +77,27 @@ export async function courseRoutes(app: FastifyInstance) {
       if (!course) {
         return fail(reply, 404, "COURSE_NOT_FOUND", "Course not found");
       }
+      const caller = callerOf(request);
+      if (!(await readsCourseId(caller, course.id))) {
+        return fail(reply, 403, "FORBIDDEN", "You are not enrolled in this course");
+      }
+      // Classmates see names only; contact details are for staff.
+      const manages = managesCourse(caller, course);
 
       const teacher = await getUser(course.teacherId);
       const rosterPromises = course.studentIds.map((id: string) => getUser(id));
       const roster = (await Promise.all(rosterPromises)).filter(
         (u: any): u is User => Boolean(u),
       );
-      const courseAssignments = await getAssignmentsByCourse(course.id);
+      const courseAssignments = (await getAssignmentsByCourse(course.id)).filter(
+        (a) => manages || a.status !== "draft",
+      );
 
       return {
         data: {
-          course,
-          teacher: teacher ?? null,
-          roster,
+          course: manages ? course : { ...course, studentIds: course.studentIds.filter((id) => id === caller?.id) },
+          teacher: teacher ? (manages ? teacher : toSummary(teacher)) : null,
+          roster: manages ? roster : roster.map(toSummary),
           assignments: courseAssignments,
         },
       };
@@ -95,11 +111,17 @@ export async function courseRoutes(app: FastifyInstance) {
       if (!course) {
         return fail(reply, 404, "COURSE_NOT_FOUND", "Course not found");
       }
+      const caller = callerOf(request);
+      if (!(await readsCourseId(caller, course.id))) {
+        return fail(reply, 403, "FORBIDDEN", "You are not enrolled in this course");
+      }
+      // Drafts are visible to the people who can publish them.
+      const manages = managesCourse(caller, course);
 
       return {
-        data: (await getAssignmentsByCourse(course.id)).sort(
-          (a, b) => a.dueAt.localeCompare(b.dueAt),
-        ),
+        data: (await getAssignmentsByCourse(course.id))
+          .filter((a) => manages || a.status !== "draft")
+          .sort((a, b) => a.dueAt.localeCompare(b.dueAt)),
       };
     },
   );
@@ -113,7 +135,19 @@ export async function courseRoutes(app: FastifyInstance) {
       }
 
       const course = await getCourse(assignment.courseId);
-      return { data: { assignment, course: course ?? null } };
+      const caller = callerOf(request);
+      if (!(await readsCourseId(caller, assignment.courseId))) {
+        return fail(reply, 403, "FORBIDDEN", "You are not enrolled in this course");
+      }
+      // Unpublished work does not exist yet as far as students are concerned.
+      if (assignment.status === "draft" && !managesCourse(caller, course)) {
+        return fail(reply, 404, "ASSIGNMENT_NOT_FOUND", "Assignment not found");
+      }
+      const visibleCourse =
+        course && !managesCourse(caller, course)
+          ? { ...course, studentIds: course.studentIds.filter((id) => id === caller?.id) }
+          : course;
+      return { data: { assignment, course: visibleCourse ?? null } };
     },
   );
 
@@ -187,6 +221,10 @@ export async function courseRoutes(app: FastifyInstance) {
     }
 
     const course = await getCourse(assignment.courseId);
+    // Staff may only submit on behalf of students in a course they manage.
+    if (caller?.role !== "student" && !managesCourse(caller, course)) {
+      return fail(reply, 403, "FORBIDDEN", "You can only submit for students in courses you teach");
+    }
     if (!course?.studentIds.includes(studentId)) {
       return fail(reply, 403, "NOT_ENROLLED", "Student is not enrolled in this course");
     }

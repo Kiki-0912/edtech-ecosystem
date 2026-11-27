@@ -11,7 +11,8 @@ class Course {
     required this.createdAt,
     this.teacherName,
     this.openAssignmentCount,
-  });
+    int? studentCount,
+  }) : _studentCount = studentCount;
 
   final String id;
   final String title;
@@ -25,7 +26,10 @@ class Course {
   final String? teacherName;
   final int? openAssignmentCount;
 
-  int get studentCount => studentIds.length;
+  /// The API trims `studentIds` to the caller unless they teach or administer
+  /// the course, so the enrolment size comes from `studentCount` when sent.
+  final int? _studentCount;
+  int get studentCount => _studentCount ?? studentIds.length;
 
   factory Course.fromJson(Map<String, dynamic> json) {
     return Course(
@@ -38,6 +42,7 @@ class Course {
       createdAt: parseServerTime(json['createdAt']) ?? DateTime.now(),
       teacherName: json['teacherName'] as String?,
       openAssignmentCount: json['openAssignmentCount'] as int?,
+      studentCount: (json['studentCount'] as num?)?.toInt(),
     );
   }
 

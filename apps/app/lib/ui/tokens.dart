@@ -33,6 +33,10 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.info,
     required this.infoSoft,
     required this.overlay,
+    required this.accentGlow,
+    required this.inkSoft,
+    required this.ink,
+    required this.onInk,
   });
 
   /// Page background.
@@ -70,6 +74,17 @@ class AppColors extends ThemeExtension<AppColors> {
   /// Scrim behind modal content.
   final Color overlay;
 
+  /// Soft orange halo for focus rings and hover glows.
+  final Color accentGlow;
+
+  /// Faint ink wash for pressed and hovered states.
+  final Color inkSoft;
+
+  /// Near-black brand surface (auth panel, hero moments) and its text colour.
+  /// Identical in light and dark mode.
+  final Color ink;
+  final Color onInk;
+
   static const light = AppColors(
     background: Color(0xFFFAFAF9),
     surface: Color(0xFFFFFFFF),
@@ -91,6 +106,10 @@ class AppColors extends ThemeExtension<AppColors> {
     info: Color(0xFF0284C7),
     infoSoft: Color(0xFFE0F2FE),
     overlay: Color(0x661C1917),
+    accentGlow: Color(0x4DFF6B00),
+    inkSoft: Color(0x0A1C1917),
+    ink: Color(0xFF1C1917),
+    onInk: Color(0xFFFAFAF9),
   );
 
   static const dark = AppColors(
@@ -114,6 +133,10 @@ class AppColors extends ThemeExtension<AppColors> {
     info: Color(0xFF38BDF8),
     infoSoft: Color(0xFF0C2A3B),
     overlay: Color(0x99000000),
+    accentGlow: Color(0x66FF6B00),
+    inkSoft: Color(0x14FAFAF9),
+    ink: Color(0xFF1C1917),
+    onInk: Color(0xFFFAFAF9),
   );
 
   @override
@@ -144,6 +167,10 @@ class AppColors extends ThemeExtension<AppColors> {
       info: l(info, other.info),
       infoSoft: l(infoSoft, other.infoSoft),
       overlay: l(overlay, other.overlay),
+      accentGlow: l(accentGlow, other.accentGlow),
+      inkSoft: l(inkSoft, other.inkSoft),
+      ink: l(ink, other.ink),
+      onInk: l(onInk, other.onInk),
     );
   }
 }
@@ -184,12 +211,14 @@ abstract final class AppSpacing {
 abstract final class AppRadius {
   static const double sm = 8;
   static const double md = 12;
-  static const double lg = 16;
+  static const double lg = 18;
+  static const double xl = 24;
   static const double pill = 999;
 
   static const BorderRadius smAll = BorderRadius.all(Radius.circular(sm));
   static const BorderRadius mdAll = BorderRadius.all(Radius.circular(md));
   static const BorderRadius lgAll = BorderRadius.all(Radius.circular(lg));
+  static const BorderRadius xlAll = BorderRadius.all(Radius.circular(xl));
   static const BorderRadius pillAll = BorderRadius.all(Radius.circular(pill));
 }
 

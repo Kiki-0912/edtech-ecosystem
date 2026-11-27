@@ -11,6 +11,7 @@ import {
   setCourseStudents,
 } from '../store/db.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
+import { managesCourseId, readableCourseIds, visibleStudentIds } from '../middleware/scope.js';
 import { bodySchema, rejectInvalidBody } from '../middleware/validation.js';
 
 const IMPORT_SCHEMA = {
@@ -35,6 +36,10 @@ const IMPORT_SCHEMA = {
 };
 
 type AuthRequest = FastifyRequest & { user?: { id: string; role?: string } };
+
+const notYourCourse = {
+  error: { code: 'FORBIDDEN', message: 'You can only export courses you teach' },
+};
 
 const excelRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/v1/excel/import/students - import students from Excel
@@ -116,10 +121,16 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin or teacher only' } });
       }
       const { courseId } = request.query as { courseId?: string };
+      // Teachers export only their own courses' students.
+      if (courseId && !(await managesCourseId(caller, courseId))) {
+        return reply.code(403).send(notYourCourse);
+      }
       let students = (await getUsers()).filter((u) => u.role === 'student');
       if (courseId) {
         students = await getStudentsByCourse(courseId);
       }
+      const visible = await visibleStudentIds(caller);
+      if (visible !== 'all') students = students.filter((s) => visible.has(s.id));
       const rows = students.map((s) => ({
         name: s.displayName,
         rollNumber: s.id, // using id as roll number placeholder
@@ -137,8 +148,16 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
     '/excel/export/attendance',
     { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
+      const caller = (request as AuthRequest).user;
       const { courseId, date } = request.query as { courseId?: string; date?: string };
-      const records = await getAttendanceRecords(courseId, date);
+      if (courseId && !(await managesCourseId(caller, courseId))) {
+        return reply.code(403).send(notYourCourse);
+      }
+      let records = await getAttendanceRecords(courseId, date);
+      if (caller?.role !== 'admin') {
+        const taught = await readableCourseIds(caller);
+        records = records.filter((r) => taught.has(r.courseId));
+      }
       const rows = records.map((r) => ({
         id: r.id,
         courseId: r.courseId,
@@ -158,8 +177,16 @@ const excelRoutes: FastifyPluginAsync = async (fastify) => {
     '/excel/export/notes',
     { preHandler: [authenticate, requireRoles('admin', 'teacher')] },
     async (request, reply) => {
+      const caller = (request as AuthRequest).user;
       const { courseId, courseCode } = request.query as { courseId?: string; courseCode?: string };
-      const notes = await getTeacherNotes(courseId, courseCode);
+      if (courseId && !(await managesCourseId(caller, courseId))) {
+        return reply.code(403).send(notYourCourse);
+      }
+      let notes = await getTeacherNotes(courseId, courseCode);
+      if (caller?.role !== 'admin') {
+        const taught = await readableCourseIds(caller);
+        notes = notes.filter((n) => taught.has(n.courseId));
+      }
       const rows = notes.map((n) => ({
         id: n.id,
         courseId: n.courseId,

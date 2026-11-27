@@ -1,3 +1,4 @@
+import 'package:edtech_app/ui/motion.dart';
 import 'package:edtech_app/ui/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -54,7 +55,8 @@ class AppPage extends StatelessWidget {
         SliverPadding(
           padding:
               EdgeInsets.fromLTRB(hPad, AppSpacing.lg, hPad, AppSpacing.md),
-          sliver: SliverToBoxAdapter(child: constrain(header)),
+          sliver: SliverToBoxAdapter(
+              child: FadeSlideIn(offset: 8, child: constrain(header))),
         ),
         if (slivers != null)
           ...slivers!.map((s) => SliverPadding(
@@ -69,7 +71,14 @@ class AppPage extends StatelessWidget {
               itemCount: children.length,
               separatorBuilder: (_, __) =>
                   const SizedBox(height: AppSpacing.lg),
-              itemBuilder: (_, i) => constrain(children[i]),
+              // The first few sections rise in one after another; the rest
+              // are built as you scroll, so they appear without ceremony.
+              itemBuilder: (_, i) => i < AppMotion.maxStagger
+                  ? FadeSlideIn(
+                      delay: AppMotion.delayFor(i + 1),
+                      child: constrain(children[i]),
+                    )
+                  : constrain(children[i]),
             ),
           ),
         const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
@@ -226,8 +235,15 @@ class ResponsiveGrid extends StatelessWidget {
         spacing: spacing,
         runSpacing: spacing,
         children: [
-          for (final child in children)
-            SizedBox(width: itemWidth, child: child),
+          for (var i = 0; i < children.length; i++)
+            SizedBox(
+              width: itemWidth,
+              child: FadeSlideIn(
+                delay: AppMotion.delayFor(i),
+                offset: 12,
+                child: children[i],
+              ),
+            ),
         ],
       );
     });

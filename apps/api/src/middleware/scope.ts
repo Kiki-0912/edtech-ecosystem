@@ -1,5 +1,6 @@
 // Data scoping helpers: which courses a caller may read or manage.
 import type { FastifyRequest } from "fastify";
+import type { StudentSummary } from "@edtech/shared";
 import type { Course } from "../store/db";
 import { getCourse, getCourses, getUser } from "../store/db";
 
@@ -45,4 +46,37 @@ export async function readableCourseIds(caller: Caller | undefined): Promise<Set
     if (course.studentIds.includes(caller.id)) enrolled.add(course.id);
   }
   return enrolled;
+}
+
+/** True if the caller may read the course: admins, its teacher, and enrolled students. */
+export async function readsCourseId(
+  caller: Caller | undefined,
+  courseId: string | null | undefined,
+): Promise<boolean> {
+  if (!caller || !courseId) return false;
+  if (caller.role === "admin") return true;
+  return (await readableCourseIds(caller)).has(courseId);
+}
+
+/**
+ * The student ids whose records the caller may see in full: every student for
+ * admins, the students on their courses' rosters for teachers, and just
+ * themselves for students.
+ */
+export async function visibleStudentIds(caller: Caller | undefined): Promise<Set<string> | "all"> {
+  if (!caller) return new Set();
+  if (caller.role === "admin") return "all";
+  if (caller.role === "teacher") {
+    const ids = new Set<string>();
+    for (const course of await getCourses()) {
+      if (course.teacherId === caller.id) course.studentIds.forEach((id) => ids.add(id));
+    }
+    return ids;
+  }
+  return new Set([caller.id]);
+}
+
+/** A name-only view of a user, for callers who may not see contact details. */
+export function toSummary(user: StudentSummary): StudentSummary {
+  return { id: user.id, displayName: user.displayName, role: user.role };
 }

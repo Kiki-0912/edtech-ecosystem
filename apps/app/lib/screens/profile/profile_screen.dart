@@ -25,16 +25,27 @@ class ProfileScreen extends StatelessWidget {
       children: [
         if (user != null)
           AppCard(
+            color: c.ink,
             padding: const EdgeInsets.all(AppSpacing.lg),
             child: Row(
               children: [
-                Avatar(name: user.displayName, size: 64),
+                // Orange ring around the avatar: the one spark on this card.
+                Container(
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: c.accent, width: 2),
+                  ),
+                  child: Avatar(name: user.displayName, size: 64),
+                ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(user.displayName, style: context.text.titleLarge),
+                      Text(user.displayName,
+                          style: context.text.titleLarge
+                              ?.copyWith(color: c.onInk)),
                       const SizedBox(height: AppSpacing.xxs),
                       StatusBadge(
                           label: roleLabel(user.role), tone: Tone.accent),

@@ -631,7 +631,7 @@ class _Bubble extends StatelessWidget {
         padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
         decoration: BoxDecoration(
-          color: own ? c.accent : c.surface,
+          color: own ? c.ink : c.surface,
           border: own ? null : Border.all(color: c.border),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(AppRadius.lg),
@@ -645,47 +645,60 @@ class _Bubble extends StatelessWidget {
           children: [
             Text(message.body,
                 style: context.text.bodyMedium
-                    ?.copyWith(color: own ? c.onAccent : c.textPrimary)),
+                    ?.copyWith(color: own ? c.onInk : c.textPrimary)),
             const SizedBox(height: 2),
             Text(
               pending ? 'Sending…' : clockTime(message.sentAt),
               style: context.text.bodySmall?.copyWith(
-                  color: own ? c.onAccent.withValues(alpha: 0.7) : c.textMuted),
+                  color: own ? c.onInk.withValues(alpha: 0.65) : c.textMuted),
             ),
           ],
         ),
       ),
     );
 
-    return Padding(
-      padding: EdgeInsets.only(top: showAuthor ? AppSpacing.sm : 2),
-      child: Row(
-        mainAxisAlignment:
-            own ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!own)
-            SizedBox(
-              width: 40,
-              child: showAuthor ? Avatar(name: author, size: 32) : null,
+    // Pops in from the sender's side.
+    return TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: AppMotion.of(context, AppMotion.base),
+        curve: AppMotion.pop,
+        builder: (context, t, child) => Opacity(
+              opacity: t.clamp(0.0, 1.0),
+              child: Transform.scale(
+                scale: 0.92 + 0.08 * t,
+                alignment: own ? Alignment.bottomRight : Alignment.bottomLeft,
+                child: child,
+              ),
             ),
-          Flexible(
-            child: Column(
-              crossAxisAlignment:
-                  own ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-              children: [
-                if (showAuthor && !own)
-                  Padding(
-                    padding:
-                        const EdgeInsets.only(left: AppSpacing.xxs, bottom: 2),
-                    child: Text(author, style: context.text.labelMedium),
-                  ),
-                bubble,
-              ],
-            ),
+        child: Padding(
+          padding: EdgeInsets.only(top: showAuthor ? AppSpacing.sm : 2),
+          child: Row(
+            mainAxisAlignment:
+                own ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!own)
+                SizedBox(
+                  width: 40,
+                  child: showAuthor ? Avatar(name: author, size: 32) : null,
+                ),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment:
+                      own ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    if (showAuthor && !own)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                            left: AppSpacing.xxs, bottom: 2),
+                        child: Text(author, style: context.text.labelMedium),
+                      ),
+                    bubble,
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        ));
   }
 }

@@ -235,10 +235,44 @@ class _SubmissionCardState extends State<_SubmissionCard> {
           if (hasSubmission && submittedAt != null)
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: Text(
-                'Handed in ${shortDate(submittedAt)} at ${clockTime(submittedAt)}.'
-                '${open ? ' You can resubmit until the assignment closes.' : ''}',
-                style: context.text.bodyMedium,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox.square(
+                      dimension: 28,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        clipBehavior: Clip.none,
+                        children: [
+                          const OverflowBox(
+                            maxWidth: 56,
+                            maxHeight: 56,
+                            child: SuccessBurst(size: 56),
+                          ),
+                          Container(
+                            width: 28,
+                            height: 28,
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: context.colors.successSoft,
+                              shape: BoxShape.circle,
+                            ),
+                            child: AnimatedCheck(
+                                size: 20,
+                                color: context.colors.success,
+                                stroke: 2.6),
+                          ),
+                        ],
+                      )),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Handed in ${shortDate(submittedAt)} at ${clockTime(submittedAt)}.'
+                      '${open ? ' You can resubmit until the assignment closes.' : ''}',
+                      style: context.text.bodyMedium,
+                    ),
+                  ),
+                ],
               ),
             ),
           if (!open)

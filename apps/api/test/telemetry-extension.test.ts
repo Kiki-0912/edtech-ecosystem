@@ -9,6 +9,7 @@ import {
   addToBucket,
   aiTabSwitchEvent,
   canonicalBatch,
+  chunkEvents,
   classifyUploadResponse,
   createLock,
   effectiveOrigins,
@@ -21,6 +22,8 @@ import {
   queueStats,
   retryDelayMs,
   sanitizeContentEvents,
+  splitBatch,
+  MAX_BATCH_EVENTS,
   RETRY_MAX_MS,
 } from "../../extension/src/lib.js";
 
@@ -122,6 +125,37 @@ describe("extension signing key and upload outcomes", () => {
     assert.equal(classifyUploadResponse(0, null), "retry");
     assert.equal(classifyUploadResponse(429, null), "retry");
     assert.equal(classifyUploadResponse(503, null), "retry");
+    assert.equal(classifyUploadResponse(413, "BATCH_TOO_LARGE"), "split");
+    assert.equal(classifyUploadResponse(413, "PAYLOAD_TOO_LARGE"), "split");
+  });
+
+  test("backlogs are chunked into modest batches", () => {
+    const events = Array.from({ length: 2 * MAX_BATCH_EVENTS + 1 }, (_, i) => i);
+    const chunks = chunkEvents(events);
+    assert.deepEqual(
+      chunks.map((chunk) => chunk.length),
+      [MAX_BATCH_EVENTS, MAX_BATCH_EVENTS, 1],
+    );
+    assert.deepEqual(chunks.flat(), events);
+    assert.deepEqual(chunkEvents([]), []);
+  });
+
+  test("a refused batch splits into two new batches with the same events", () => {
+    let n = 0;
+    const uuid = () => `id-${++n}`;
+    const batch = {
+      batchId: "orig",
+      studentId: "s",
+      assignmentId: "a",
+      createdAt: "2026-11-25T00:00:00.000Z",
+      events: [{ id: "e1" }, { id: "e2" }, { id: "e3" }],
+    };
+    const halves = splitBatch(batch, uuid);
+    assert.ok(halves);
+    assert.deepEqual(halves.map((h) => h.batchId), ["id-1", "id-2"]);
+    assert.deepEqual(halves.flatMap((h) => h.events), batch.events);
+    assert.ok(halves.every((h) => h.createdAt === batch.createdAt && h.studentId === "s"));
+    assert.equal(splitBatch({ ...batch, events: [{ id: "e1" }] }, uuid), null);
   });
 
   test("backoff doubles and is capped", () => {

@@ -1,3 +1,4 @@
+import 'package:edtech_app/ui/motion.dart';
 import 'package:edtech_app/ui/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -55,11 +56,11 @@ ThemeData buildTheme(Brightness brightness) {
   );
 
   final inputBorder = OutlineInputBorder(
-    borderRadius: AppRadius.mdAll,
+    borderRadius: const BorderRadius.all(Radius.circular(14)),
     borderSide: BorderSide(color: c.border),
   );
 
-  const buttonShape = RoundedRectangleBorder(borderRadius: AppRadius.mdAll);
+  const buttonShape = StadiumBorder();
   const buttonPadding =
       EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm);
   const minButton = Size(64, 44);
@@ -76,6 +77,14 @@ ThemeData buildTheme(Brightness brightness) {
     extensions: [c],
     visualDensity: VisualDensity.standard,
     splashFactory: InkSparkle.splashFactory,
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.android: SoftRiseTransitionsBuilder(),
+      TargetPlatform.iOS: SoftRiseTransitionsBuilder(),
+      TargetPlatform.linux: SoftRiseTransitionsBuilder(),
+      TargetPlatform.macOS: SoftRiseTransitionsBuilder(),
+      TargetPlatform.windows: SoftRiseTransitionsBuilder(),
+      TargetPlatform.fuchsia: SoftRiseTransitionsBuilder(),
+    }),
     appBarTheme: AppBarTheme(
       backgroundColor: c.surface,
       foregroundColor: c.textPrimary,
@@ -157,7 +166,7 @@ ThemeData buildTheme(Brightness brightness) {
       border: inputBorder,
       enabledBorder: inputBorder,
       focusedBorder: inputBorder.copyWith(
-          borderSide: BorderSide(color: c.accent, width: 1.5)),
+          borderSide: BorderSide(color: c.accent, width: 2)),
       errorBorder:
           inputBorder.copyWith(borderSide: BorderSide(color: c.danger)),
       focusedErrorBorder: inputBorder.copyWith(

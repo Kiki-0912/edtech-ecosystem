@@ -1,4 +1,5 @@
 import 'package:edtech_app/formats.dart';
+import 'package:edtech_app/ui/motion.dart';
 import 'package:edtech_app/ui/tokens.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -234,21 +235,31 @@ class BusyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final child = busy
-        ? SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-                strokeWidth: 2, color: context.colors.onAccent),
-          )
-        : Text(label);
+    final child = AnimatedSwitcher(
+      duration: AppMotion.of(context, AppMotion.fast),
+      transitionBuilder: (child, animation) =>
+          FadeTransition(opacity: animation, child: child),
+      child: busy
+          ? SizedBox(
+              key: const ValueKey('busy'),
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: context.colors.onAccent),
+            )
+          : Text(label, key: const ValueKey('label')),
+    );
     if (icon != null && !busy) {
-      return FilledButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon, size: 18),
-        label: child,
+      return Pressable(
+        child: FilledButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: child,
+        ),
       );
     }
-    return FilledButton(onPressed: busy ? null : onPressed, child: child);
+    return Pressable(
+      child: FilledButton(onPressed: busy ? null : onPressed, child: child),
+    );
   }
 }

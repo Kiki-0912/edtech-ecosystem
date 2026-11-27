@@ -125,9 +125,19 @@ function verifyBatchSignature(
   return { ok: true };
 }
 
+/**
+ * Upload limits. The extension sends at most 1,000 events per batch (about
+ * 230 KB); these leave headroom for older queued batches of up to 5,000 events
+ * (about 1.2 MB, which Fastify's default 1 MiB body limit used to reject).
+ * Anything bigger gets 413 so the extension splits it instead of dropping it.
+ */
+export const MAX_BATCH_EVENTS = 5_000;
+export const TELEMETRY_BODY_LIMIT = 4 * 1024 * 1024;
+
 export async function telemetryRoutes(app: FastifyInstance) {
   app.post<{ Body: SignedTelemetryBatch }>(
     "/telemetry/batches",
+    { bodyLimit: TELEMETRY_BODY_LIMIT },
     async (request, reply) => {
       const batch = request.body;
 
@@ -146,6 +156,14 @@ export async function telemetryRoutes(app: FastifyInstance) {
           400,
           "INVALID_BATCH",
           "A signed batch with at least one telemetry event is required",
+        );
+      }
+      if (batch.events.length > MAX_BATCH_EVENTS) {
+        return fail(
+          reply,
+          413,
+          "BATCH_TOO_LARGE",
+          `A batch can hold at most ${MAX_BATCH_EVENTS} events; split it and retry`,
         );
       }
 

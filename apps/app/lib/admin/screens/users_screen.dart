@@ -306,16 +306,20 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
               children: [
                 for (var i = 0; i < _users.length; i++) ...[
                   if (i > 0) const Divider(),
-                  _UserRow(
-                    user: _users[i],
-                    isSelf: _users[i].id == myId,
-                    onAction: (action) => switch (action) {
-                      _UserAction.edit => _openForm(_users[i]),
-                      _UserAction.password => _resetPassword(_users[i]),
-                      _UserAction.activate => _setActive(_users[i], true),
-                      _UserAction.deactivate => _setActive(_users[i], false),
-                      _UserAction.delete => _delete(_users[i]),
-                    },
+                  FadeSlideIn(
+                    delay: AppMotion.delayFor(i),
+                    offset: 8,
+                    child: _UserRow(
+                      user: _users[i],
+                      isSelf: _users[i].id == myId,
+                      onAction: (action) => switch (action) {
+                        _UserAction.edit => _openForm(_users[i]),
+                        _UserAction.password => _resetPassword(_users[i]),
+                        _UserAction.activate => _setActive(_users[i], true),
+                        _UserAction.deactivate => _setActive(_users[i], false),
+                        _UserAction.delete => _delete(_users[i]),
+                      },
+                    ),
                   ),
                 ],
               ],

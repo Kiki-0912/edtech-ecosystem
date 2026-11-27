@@ -118,6 +118,7 @@ class _CoursesScreenState extends State<CoursesScreen> {
                 )
               : const EmptyState(
                   icon: Icons.menu_book_outlined,
+                  illustration: IllustrationKind.courses,
                   title: 'No courses yet',
                   message: 'Courses you join or teach will appear here.',
                 ),
@@ -152,6 +153,8 @@ class CourseCard extends StatelessWidget {
         children: [
           Row(
             children: [
+              _Monogram(title: course.title),
+              const SizedBox(width: AppSpacing.sm),
               StatusBadge(label: course.code, tone: Tone.accent),
               const Spacer(),
               Text(course.term, style: context.text.bodySmall),
@@ -184,6 +187,34 @@ class CourseCard extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Ink tile with the course's initials; the orange letters are the spark.
+class _Monogram extends StatelessWidget {
+  const _Monogram({required this.title});
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final letters = title
+        .split(RegExp(r'\s+'))
+        .where((w) => w.isNotEmpty)
+        .take(2)
+        .map((w) => w[0].toUpperCase())
+        .join();
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: c.ink, borderRadius: AppRadius.mdAll),
+      child: Text(
+        letters,
+        style: context.text.titleSmall?.copyWith(color: c.accent),
       ),
     );
   }

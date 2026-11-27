@@ -29,6 +29,9 @@ class EventList extends StatelessWidget {
     if (events.isEmpty) {
       return EmptyState(
         icon: Icons.event_available_outlined,
+        illustration: emptyTitle.contains('caught up')
+            ? IllustrationKind.caughtUp
+            : IllustrationKind.nothing,
         title: emptyTitle,
         message: emptyMessage,
       );
@@ -36,21 +39,24 @@ class EventList extends StatelessWidget {
     final now = DateTime.now();
     return Column(
       children: [
-        for (final e in events.take(limit))
-          ListRow(
-            key: Key('home-event-${e.id}'),
-            leading: IconBadge(
-                icon: eventIcon(e.kind), tone: eventTone(e.kind), size: 36),
-            title: e.title,
-            subtitle: showDate
-                ? '${isSameDay(e.startsAt, now) ? 'Today' : shortDate(e.startsAt)} · ${clockTime(e.startsAt)}'
-                : '${clockTime(e.startsAt)}${e.endsAt != null ? ' – ${clockTime(e.endsAt!)}' : ''}',
-            trailing: StatusBadge(
-              label: kindLabel(e.kind),
-              tone: eventTone(e.kind),
-            ),
-            onTap: () => context.go('/calendar'),
-          ),
+        for (final (i, e) in events.take(limit).indexed)
+          FadeSlideIn(
+              delay: AppMotion.delayFor(i),
+              offset: 10,
+              child: ListRow(
+                key: Key('home-event-${e.id}'),
+                leading: IconBadge(
+                    icon: eventIcon(e.kind), tone: eventTone(e.kind), size: 36),
+                title: e.title,
+                subtitle: showDate
+                    ? '${isSameDay(e.startsAt, now) ? 'Today' : shortDate(e.startsAt)} · ${clockTime(e.startsAt)}'
+                    : '${clockTime(e.startsAt)}${e.endsAt != null ? ' – ${clockTime(e.endsAt!)}' : ''}',
+                trailing: StatusBadge(
+                  label: kindLabel(e.kind),
+                  tone: eventTone(e.kind),
+                ),
+                onTap: () => context.go('/calendar'),
+              )),
       ],
     );
   }
@@ -192,12 +198,26 @@ class QuickActions extends StatelessWidget {
       spacing: AppSpacing.xs,
       runSpacing: AppSpacing.xs,
       children: [
-        for (final (icon, label, path) in actions)
-          OutlinedButton.icon(
-            key: Key('quick-${path.replaceAll('/', '-')}'),
-            onPressed: () => context.go(path),
-            icon: Icon(icon, size: 18),
-            label: Text(label),
+        for (final (i, (icon, label, path)) in actions.indexed)
+          FadeSlideIn(
+            delay: AppMotion.delayFor(i),
+            offset: 8,
+            // One hero action per screen: the first is the orange one.
+            child: Pressable(
+              child: i == 0
+                  ? FilledButton.icon(
+                      key: Key('quick-${path.replaceAll('/', '-')}'),
+                      onPressed: () => context.go(path),
+                      icon: Icon(icon, size: 18),
+                      label: Text(label),
+                    )
+                  : OutlinedButton.icon(
+                      key: Key('quick-${path.replaceAll('/', '-')}'),
+                      onPressed: () => context.go(path),
+                      icon: Icon(icon, size: 18),
+                      label: Text(label),
+                    ),
+            ),
           ),
       ],
     );

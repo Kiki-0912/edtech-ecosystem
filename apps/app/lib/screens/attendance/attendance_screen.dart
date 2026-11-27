@@ -227,8 +227,12 @@ class _StudentView extends StatelessWidget {
                 )
               : Column(
                   children: [
-                    for (final r in records.take(30))
-                      _RecordRow(record: r, code: codeOf(r.courseId)),
+                    for (final (i, r) in records.take(30).indexed)
+                      FadeSlideIn(
+                        delay: AppMotion.delayFor(i),
+                        offset: 8,
+                        child: _RecordRow(record: r, code: codeOf(r.courseId)),
+                      ),
                   ],
                 ),
         ),
@@ -256,7 +260,7 @@ class _DayStrip extends StatelessWidget {
         spacing: 4,
         runSpacing: 4,
         children: [
-          for (final d in days)
+          for (final (i, d) in days.indexed)
             () {
               final dayRecords = records.where((r) => r.date == isoDate(d));
               final status =
@@ -264,30 +268,33 @@ class _DayStrip extends StatelessWidget {
               final color = status == null
                   ? c.surfaceMuted
                   : c.fg(attendanceTone(status));
-              return Tooltip(
-                message: '${dayMonth(d)}: ${status ?? 'no class'}',
-                child: Container(
-                  width: size,
-                  height: size,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: color,
-                    borderRadius: AppRadius.smAll,
-                  ),
-                  padding: const EdgeInsets.all(AppSpacing.xxs),
-                  // Scales the token style down to the cell instead of a
-                  // computed font size.
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      '${d.day}',
-                      style: context.text.labelSmall?.copyWith(
-                        color: status == null ? c.textMuted : c.surface,
+              return FadeSlideIn(
+                  delay: AppMotion.delayFor(i),
+                  offset: 6,
+                  child: Tooltip(
+                    message: '${dayMonth(d)}: ${status ?? 'no class'}',
+                    child: Container(
+                      width: size,
+                      height: size,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: AppRadius.smAll,
+                      ),
+                      padding: const EdgeInsets.all(AppSpacing.xxs),
+                      // Scales the token style down to the cell instead of a
+                      // computed font size.
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          '${d.day}',
+                          style: context.text.labelSmall?.copyWith(
+                            color: status == null ? c.textMuted : c.surface,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-              );
+                  ));
             }(),
         ],
       );

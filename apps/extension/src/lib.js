@@ -14,6 +14,8 @@ export const DEFAULT_API_BASE_URL = "http://localhost:4000";
 export const RETRY_BASE_MS = 10_000;
 export const RETRY_MAX_MS = 5 * 60 * 1000;
 export const MAX_SIGNATURE_FAILURES = 2;
+/** Events per uploaded batch: about 230 KB signed, far under the API's limit. */
+export const MAX_BATCH_EVENTS = 1_000;
 
 /** Event types a content script may report, with the one numeric field each keeps. */
 const CONTENT_EVENT_FIELDS = {
@@ -267,6 +269,34 @@ export function buildBatch({ studentId, assignmentId, sessionId, events, now, uu
   };
 }
 
+/** Split a list into consecutive chunks of at most `size` items. */
+export function chunkEvents(events, size = MAX_BATCH_EVENTS) {
+  const chunks = [];
+  for (let i = 0; i < events.length; i += size) {
+    chunks.push(events.slice(i, i + size));
+  }
+  return chunks;
+}
+
+/**
+ * Halve a batch the API refused as too large (413). Each half gets a new
+ * batchId (the API de-duplicates by id, and the contents differ) but keeps
+ * the events, their ids and createdAt. Returns null for a single-event batch,
+ * which cannot get any smaller.
+ */
+export function splitBatch(batch, uuid) {
+  if (batch.events.length <= 1) {
+    return null;
+  }
+  const makeId = uuid ?? (() => crypto.randomUUID());
+  const middle = Math.ceil(batch.events.length / 2);
+  return [batch.events.slice(0, middle), batch.events.slice(middle)].map((events) => ({
+    ...batch,
+    batchId: makeId(),
+    events,
+  }));
+}
+
 /** The exact JSON the API re-serialises and verifies (key order matters). */
 export function canonicalBatch(batch) {
   return JSON.stringify({
@@ -324,6 +354,7 @@ export async function signBatch(batch, jwk, subtle = crypto.subtle) {
  *  ok      - accepted (202, or an idempotent replay)
  *  reauth  - the bearer token was rejected: keep the batch, ask to sign in
  *  resign  - the signature was rejected: new key, try again (bounded)
+ *  split   - too large (413): halve the batch and upload both halves
  *  drop    - permanently rejected (unknown assignment, someone else's batch...)
  *  retry   - transient (network, 408, 429, 5xx): back off
  */
@@ -339,6 +370,9 @@ export function classifyUploadResponse(status, code) {
   }
   if (status === 400 && code === "INVALID_SIGNATURE") {
     return "resign";
+  }
+  if (status === 413) {
+    return "split";
   }
   if (status === 408 || status === 429 || status >= 500) {
     return "retry";

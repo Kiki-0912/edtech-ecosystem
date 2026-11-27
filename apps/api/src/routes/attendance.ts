@@ -10,6 +10,10 @@ import {
 } from '../store/db.js';
 import { authenticate, requireRoles } from '../middleware/auth.js';
 import { callerOf, managesCourse, managesCourseId, readableCourseIds } from '../middleware/scope.js';
+
+const notEnrolled = (studentId: string) => ({
+  error: { code: 'INVALID_REFERENCE', message: `Student is not enrolled in this course: ${studentId}` },
+});
 import { TEXT, bodySchema, rejectInvalidBody } from '../middleware/validation.js';
 
 const STATUSES: AttendanceStatus[] = ['present', 'absent', 'late', 'excused'];
@@ -113,6 +117,16 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
       if (!(await managesCourseId(caller, body.courseId))) {
         return reply.code(403).send(forbidden);
       }
+      // Only students on the course's roster can be marked.
+      const course = await getCourse(body.courseId);
+      if (!course) {
+        return reply
+          .code(400)
+          .send({ error: { code: 'INVALID_REFERENCE', message: 'Course not found' } });
+      }
+      if (!course.studentIds.includes(body.studentId)) {
+        return reply.code(400).send(notEnrolled(body.studentId));
+      }
       const record = await upsertAttendanceRecord({
         courseId: body.courseId,
         studentId: body.studentId,
@@ -141,7 +155,8 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(403).send(forbidden);
       }
       // Check every reference first, so a bad row cannot leave a partial write.
-      if (!(await getCourse(body.courseId))) {
+      const course = await getCourse(body.courseId);
+      if (!course) {
         return reply
           .code(400)
           .send({ error: { code: 'INVALID_REFERENCE', message: 'Course not found' } });
@@ -152,6 +167,10 @@ const attendanceRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.code(400).send({
           error: { code: 'INVALID_REFERENCE', message: `Unknown student: ${unknown.studentId}` },
         });
+      }
+      const outsider = body.records.find((r) => !course.studentIds.includes(r.studentId));
+      if (outsider) {
+        return reply.code(400).send(notEnrolled(outsider.studentId));
       }
       const results = [];
       for (const r of body.records) {

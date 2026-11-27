@@ -138,8 +138,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     title: 'No assignments yet')
                 : Column(
                     children: [
-                      for (final a in [...open, ...closed])
-                        AssignmentRow(courseId: course.id, assignment: a),
+                      for (final (i, a) in [...open, ...closed].indexed)
+                        FadeSlideIn(
+                          delay: AppMotion.delayFor(i),
+                          offset: 8,
+                          child:
+                              AssignmentRow(courseId: course.id, assignment: a),
+                        ),
                     ],
                   ),
           ),
@@ -151,16 +156,19 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                     icon: Icons.groups_outlined, title: 'No students enrolled')
                 : Column(
                     children: [
-                      for (final p in _people)
-                        ListRow(
-                          dense: true,
-                          leading: Avatar(
-                              name: p['displayName']?.toString() ?? '?',
-                              size: 32),
-                          title: p['displayName']?.toString() ?? 'Student',
-                          subtitle: p['rollNumber']?.toString() ??
-                              p['email']?.toString(),
-                        ),
+                      for (final (i, p) in _people.indexed)
+                        FadeSlideIn(
+                            delay: AppMotion.delayFor(i),
+                            offset: 8,
+                            child: ListRow(
+                              dense: true,
+                              leading: Avatar(
+                                  name: p['displayName']?.toString() ?? '?',
+                                  size: 32),
+                              title: p['displayName']?.toString() ?? 'Student',
+                              subtitle: p['rollNumber']?.toString() ??
+                                  p['email']?.toString(),
+                            )),
                     ],
                   ),
           ),

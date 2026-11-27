@@ -16,7 +16,7 @@ import {
   updateCalendarEvent,
 } from "../store/db";
 import type { CalendarEventKind } from "../store/db";
-import { callerOf, managesCourseId, readableCourseIds } from "../middleware/scope";
+import { callerOf, managesCourseId, readableCourseIds, readsCourseId } from "../middleware/scope";
 import {
   NULLABLE_TEXT,
   TEXT,
@@ -217,6 +217,10 @@ export async function classroomRoutes(app: FastifyInstance) {
       const course = await getCourse(request.params.courseId);
       if (!course) {
         return fail(reply, 404, "COURSE_NOT_FOUND", "Course not found");
+      }
+      // Channel lists (with member ids) are for the course's own people.
+      if (!(await readsCourseId(callerOf(request), course.id))) {
+        return fail(reply, 403, "FORBIDDEN", "You do not have access to this course");
       }
 
       return {

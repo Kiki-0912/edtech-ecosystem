@@ -104,6 +104,13 @@ export async function buildApp() {
       } satisfies ApiError);
     }
 
+    // Bodies over the route's limit (the extension splits on 413 and retries).
+    if (error.code === "FST_ERR_CTP_BODY_TOO_LARGE") {
+      return reply.code(413).send({
+        error: { code: "PAYLOAD_TOO_LARGE", message: "Request body is too large" },
+      } satisfies ApiError);
+    }
+
     // Schema failures and unparseable JSON bodies are the client's fault.
     if (
       error.validation ||

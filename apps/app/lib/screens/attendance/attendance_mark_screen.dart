@@ -227,7 +227,7 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
     return AppPage(
       title: 'Mark attendance',
       subtitle: 'Take roll for a class session',
-      bottom: saveBar,
+      bottom: saveBar == null ? null : FadeSlideIn(child: saveBar),
       onRefresh: _loadRoster,
       children: [
         Align(
@@ -328,6 +328,13 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
   }
 }
 
+IconData _statusIcon(String status) => switch (status) {
+      'present' => Icons.check_rounded,
+      'absent' => Icons.close_rounded,
+      'late' => Icons.schedule_rounded,
+      _ => Icons.event_busy_rounded,
+    };
+
 class _RosterRow extends StatelessWidget {
   const _RosterRow({
     super.key,
@@ -352,8 +359,13 @@ class _RosterRow extends StatelessWidget {
       runSpacing: AppSpacing.xxs,
       children: [
         for (final s in _statuses)
-          ChoiceChip(
+          Pressable(
+              child: ChoiceChip(
             key: Key('mark-${student['id']}-$s'),
+            avatar: status == s
+                ? Icon(_statusIcon(s), size: 16, color: c.fg(attendanceTone(s)))
+                : null,
+            showCheckmark: false,
             label: Text('${s[0].toUpperCase()}${s.substring(1)}'),
             selected: status == s,
             onSelected: (_) => onStatus(s),
@@ -365,7 +377,7 @@ class _RosterRow extends StatelessWidget {
               fontWeight: status == s ? FontWeight.w600 : FontWeight.w500,
             ),
             visualDensity: VisualDensity.compact,
-          ),
+          )),
       ],
     );
 

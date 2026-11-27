@@ -221,12 +221,16 @@ class _StudentsScreenState extends State<StudentsScreen> {
                 if (wide) const _TableHeader(),
                 for (var i = 0; i < filtered.length; i++) ...[
                   if (i > 0) const Divider(),
-                  _StudentRow(
-                    student: filtered[i],
-                    courses: _coursesLabel(filtered[i]),
-                    wide: wide,
-                    onEdit: admin ? () => _openForm(filtered[i]) : null,
-                    onDelete: admin ? () => _delete(filtered[i]) : null,
+                  FadeSlideIn(
+                    delay: AppMotion.delayFor(i),
+                    offset: 8,
+                    child: _StudentRow(
+                      student: filtered[i],
+                      courses: _coursesLabel(filtered[i]),
+                      wide: wide,
+                      onEdit: admin ? () => _openForm(filtered[i]) : null,
+                      onDelete: admin ? () => _delete(filtered[i]) : null,
+                    ),
                   ),
                 ],
               ],

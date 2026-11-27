@@ -310,20 +310,23 @@ class _RosterView extends StatelessWidget {
           : 'Average effort ${avg.round()} across ${scored.length} reports',
       child: Column(
         children: [
-          for (final r in roster)
-            ListRow(
-              key: Key('integrity-student-${r['studentId']}'),
-              leading: Avatar(name: r['displayName']?.toString() ?? '?'),
-              title: r['displayName']?.toString() ?? 'Student',
-              subtitle: submissionLabel(r['status']?.toString()),
-              trailing: r['effortScore'] is num
-                  ? StatusBadge(
-                      label: 'Effort ${r['effortScore']}',
-                      tone: effortTone((r['effortScore'] as num).toInt()),
-                    )
-                  : const StatusBadge(label: 'No data'),
-              onTap: () => onSelect(r['studentId'].toString()),
-            ),
+          for (final (i, r) in roster.indexed)
+            FadeSlideIn(
+                delay: AppMotion.delayFor(i),
+                offset: 8,
+                child: ListRow(
+                  key: Key('integrity-student-${r['studentId']}'),
+                  leading: Avatar(name: r['displayName']?.toString() ?? '?'),
+                  title: r['displayName']?.toString() ?? 'Student',
+                  subtitle: submissionLabel(r['status']?.toString()),
+                  trailing: r['effortScore'] is num
+                      ? StatusBadge(
+                          label: 'Effort ${r['effortScore']}',
+                          tone: effortTone((r['effortScore'] as num).toInt()),
+                        )
+                      : const StatusBadge(label: 'No data'),
+                  onTap: () => onSelect(r['studentId'].toString()),
+                )),
         ],
       ),
     );
@@ -368,6 +371,9 @@ class _ReportView extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text('Updated ${shortDate(report.generatedAt.toLocal())}',
               style: context.text.bodySmall),
+          const SizedBox(height: AppSpacing.xs),
+          Text('A signal to start a conversation, not a verdict.',
+              textAlign: TextAlign.center, style: context.text.bodySmall),
         ],
       ),
     );

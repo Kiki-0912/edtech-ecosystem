@@ -23,8 +23,9 @@ Map<String, Object> _session(String role) => {
       }),
     };
 
-Future<void> _pumpAs(WidgetTester tester, String role) async {
-  tester.view.physicalSize = const Size(390, 844);
+Future<void> _pumpAs(WidgetTester tester, String role,
+    {Size size = const Size(390, 844)}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -94,5 +95,47 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
     expect(GoRouter.of(context).state.matchedLocation, '/');
+  });
+
+  testWidgets('command palette filters destinations and navigates',
+      (tester) async {
+    await _pumpAs(tester, 'teacher', size: const Size(1400, 900));
+    await tester.tap(find.byKey(const Key('appbar-search')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('palette-input')), findsOneWidget);
+
+    await tester.enterText(find.byKey(const Key('palette-input')), 'cour');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('palette-Courses')), findsOneWidget);
+    expect(find.byKey(const Key('palette-Calendar')), findsNothing);
+
+    await tester.tap(find.byKey(const Key('palette-Courses')));
+    await tester.pumpAndSettle();
+    final context = tester.element(find.byKey(home.navKey));
+    expect(GoRouter.of(context).state.matchedLocation, '/courses');
+  });
+
+  testWidgets('sidebar collapses to icons and expands again', (tester) async {
+    await _pumpAs(tester, 'teacher', size: const Size(1400, 900));
+    expect(find.text('Collapse'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('sidebar-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('Collapse'), findsNothing);
+    expect(find.byKey(home.navKey), findsOneWidget, reason: 'icons stay');
+
+    await tester.tap(find.byKey(const Key('sidebar-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.text('Collapse'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the nav pill follows the selected destination', (tester) async {
+    await _pumpAs(tester, 'teacher', size: const Size(1400, 900));
+    final pill = find.byKey(const Key('nav-pill'));
+    final before = tester.getTopLeft(pill).dy;
+    await tester.tap(find.byKey(courses.navKey));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(pill).dy, greaterThan(before));
   });
 }

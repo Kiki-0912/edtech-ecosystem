@@ -25,11 +25,25 @@ class AdminShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void open() => showCommandPalette(context, [
+          for (final d in kAdminDestinations)
+            PaletteItem(
+              label: d.label,
+              icon: d.icon,
+              hint: 'Go to ${d.label}',
+              onSelect: () => _go(d),
+            ),
+        ]);
+    return PaletteShortcut(onOpen: open, child: _layout(context, open));
+  }
+
+  Widget _layout(BuildContext context, VoidCallback onSearch) {
     final current = kAdminDestinations[navigationShell.currentIndex];
     final size = context.windowSize;
     final topBar = _AdminTopBar(
       title: current.label,
       showBrand: size == WindowSize.compact,
+      onSearch: onSearch,
     );
 
     if (size == WindowSize.compact) {
@@ -37,7 +51,8 @@ class AdminShell extends StatelessWidget {
       final primaryIndex = primary.indexOf(current);
       return Scaffold(
         appBar: topBar,
-        body: navigationShell,
+        body: SwitchFade(
+            token: navigationShell.currentIndex, child: navigationShell),
         bottomNavigationBar: NavigationBar(
           selectedIndex: primaryIndex >= 0 ? primaryIndex : primary.length,
           onDestinationSelected: (i) {
@@ -65,35 +80,53 @@ class AdminShell extends StatelessWidget {
       );
     }
 
+    final c = context.colors;
     final sideNav = size == WindowSize.medium
-        ? NavigationRail(
-            selectedIndex: current.branchIndex,
-            onDestinationSelected: (i) => _go(kAdminDestinations[i]),
-            labelType: NavigationRailLabelType.all,
-            // Nine sections do not fit a short window (landscape phone).
-            scrollable: true,
-            leading: const Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: BrandMark(showName: false),
+        ? Theme(
+            data: Theme.of(context).copyWith(
+              navigationRailTheme: NavigationRailThemeData(
+                backgroundColor: c.ink,
+                indicatorColor: c.accent,
+                indicatorShape: const StadiumBorder(),
+                selectedIconTheme: IconThemeData(color: c.onAccent),
+                unselectedIconTheme: IconThemeData(color: c.onInk),
+                selectedLabelTextStyle: context.text.labelMedium
+                    ?.copyWith(color: c.onInk, fontWeight: FontWeight.w700),
+                unselectedLabelTextStyle: context.text.labelMedium
+                    ?.copyWith(color: c.onInk.withValues(alpha: 0.7)),
+              ),
             ),
-            destinations: [
-              for (final d in kAdminDestinations)
-                NavigationRailDestination(
-                  icon: Icon(d.icon, key: d.navKey),
-                  selectedIcon: Icon(d.selectedIcon, key: d.navKey),
-                  label: Text(d.label),
-                ),
-            ],
-          )
+            child: NavigationRail(
+              selectedIndex: current.branchIndex,
+              onDestinationSelected: (i) => _go(kAdminDestinations[i]),
+              labelType: NavigationRailLabelType.all,
+              // Nine sections do not fit a short window (landscape phone).
+              scrollable: true,
+              leading: const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: BrandMark(showName: false),
+              ),
+              destinations: [
+                for (final d in kAdminDestinations)
+                  NavigationRailDestination(
+                    icon: Icon(d.icon, key: d.navKey),
+                    selectedIcon: Icon(d.selectedIcon, key: d.navKey),
+                    label: Text(d.label),
+                  ),
+              ],
+            ))
         : _Sidebar(current: current, onSelect: _go);
 
     return Scaffold(
       body: Row(
         children: [
           sideNav,
-          VerticalDivider(width: 1, color: context.colors.border),
           Expanded(
-            child: Scaffold(appBar: topBar, body: navigationShell),
+            child: Scaffold(
+              appBar: topBar,
+              body: SwitchFade(
+                  token: navigationShell.currentIndex, child: navigationShell),
+            ),
           ),
         ],
       ),
@@ -143,92 +176,38 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     final user = context.watch<AuthProvider>().user;
-
-    Widget item(AdminDestination d) {
-      final selected = d == current;
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Material(
-          color: selected ? c.accentSoft : c.surface,
-          borderRadius: AppRadius.mdAll,
-          child: InkWell(
-            key: d.navKey,
-            borderRadius: AppRadius.mdAll,
-            onTap: () => onSelect(d),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  Icon(selected ? d.selectedIcon : d.icon,
-                      size: 20, color: selected ? c.accentText : c.textMuted),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      d.label,
-                      overflow: TextOverflow.ellipsis,
-                      style: context.text.labelLarge?.copyWith(
-                        color: selected ? c.accentText : c.textSecondary,
-                        fontWeight:
-                            selected ? FontWeight.w600 : FontWeight.w500,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+    return InkSidebar(
+      badge: const StatusBadge(label: 'Admin', tone: Tone.info),
+      groups: [
+        SidebarGroup(items: [
+          for (final d in kAdminDestinations)
+            SidebarItem(
+              label: d.label,
+              icon: d.icon,
+              selectedIcon: d.selectedIcon,
+              itemKey: d.navKey,
             ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      width: 248,
-      color: c.surface,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(
-                  AppSpacing.xs, AppSpacing.xs, 0, AppSpacing.lg),
-              child: Row(
-                children: [
-                  BrandMark(),
-                  SizedBox(width: AppSpacing.xs),
-                  Flexible(child: StatusBadge(label: 'Admin', tone: Tone.info)),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                children: [for (final d in kAdminDestinations) item(d)],
-              ),
-            ),
-            if (user != null)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: ListRow(
-                  leading: Avatar(name: user.displayName),
-                  title: user.displayName,
-                  subtitle: roleLabel(user.role),
-                ),
-              ),
-          ],
-        ),
-      ),
+        ]),
+      ],
+      selected: kAdminDestinations.indexOf(current),
+      onSelect: (i) => onSelect(kAdminDestinations[i]),
+      userName: user?.displayName,
+      userRole: user == null ? null : roleLabel(user.role),
     );
   }
 }
 
 class _AdminTopBar extends StatelessWidget implements PreferredSizeWidget {
-  const _AdminTopBar({required this.title, required this.showBrand});
+  const _AdminTopBar({
+    required this.title,
+    required this.showBrand,
+    required this.onSearch,
+  });
 
   final String title;
   final bool showBrand;
+  final VoidCallback onSearch;
 
   @override
   Size get preferredSize => const Size.fromHeight(60);
@@ -253,6 +232,12 @@ class _AdminTopBar extends StatelessWidget implements PreferredSizeWidget {
             )
           : Text(title),
       actions: [
+        IconButton(
+          key: const Key('appbar-search'),
+          tooltip: 'Search (Ctrl+K)',
+          icon: const Icon(Icons.search_rounded),
+          onPressed: onSearch,
+        ),
         PopupMenuButton<String>(
           key: const Key('admin-account'),
           tooltip: 'Account',

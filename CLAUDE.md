@@ -155,6 +155,18 @@ newline, max line length 100 for Dart and Rust.
   Orange (`accent`) is for primary actions and active navigation only; status
   uses semantic tones (`attendanceTone`, `StatusBadge`). Orange *text* uses
   `accentText` (contrast).
+- **Motion** lives in `lib/ui/motion.dart`. Use `AppMotion` durations/curves
+  (`fast` 150 ms, `base` 280 ms, `slow` 450 ms) and the shared widgets
+  (`FadeSlideIn`, `Pressable`, `CountUpText`, `AnimatedCheck`, `SuccessBurst`);
+  never hard-code durations in screens. Every animation must respect reduced
+  motion (`AppMotion.of(context, d)`), play once, and finish on its own: no
+  infinite loops, so `pumpAndSettle` can settle. No animation packages.
+- Navigation chrome is `InkSidebar` (collapsible, one gliding orange pill) shared by
+  `AppShell` and `AdminShell`; Ctrl/Cmd+K opens `showCommandPalette`. Empty and error
+  states may use `LineIllustration` (`IllustrationKind`): one-time line draw, no loops.
+- Orange is also allowed for *celebration* (success bursts, streaks, "all
+  caught up"), in addition to primary actions and active navigation. The auth
+  panel and other hero surfaces use `c.ink` / `c.onInk`.
 - Every page wraps content in `AppPage` and handles loading/error/empty through
   `AsyncBody`. Forms open with `showFormSheet` (sheet on phone, dialog on wide).
   Destructive actions go through `confirmDialog`.

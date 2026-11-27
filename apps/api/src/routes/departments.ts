@@ -12,6 +12,7 @@ import {
 } from '../store/db.js';
 import type { DepartmentCategory } from '../store/db.js';
 import { authenticate } from '../middleware/auth.js';
+import { visibleStudentIds } from '../middleware/scope.js';
 import { TEXT, bodySchema, rejectInvalidBody } from '../middleware/validation.js';
 
 const CATEGORIES: DepartmentCategory[] = ['3 Years', '2 Years', '6 Months', '2 Years Paramedical'];
@@ -47,12 +48,16 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
     }
   );
 
-  // GET /api/v1/departments/:id/students - students in a department
+  // GET /api/v1/departments/:id/students - students in a department (admin
+  // only: a department spans every course, and the rows carry contact details)
   fastify.get(
     '/departments/:id/students',
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
+      if (req.user?.role !== 'admin') {
+        return reply.code(403).send({ error: { code: 'FORBIDDEN', message: 'Admin only' } });
+      }
       const students = await getStudentsByDepartment((req.params as { id: string }).id);
       return reply.send({ data: students });
     }
@@ -138,12 +143,20 @@ const departmentsRoutes: FastifyPluginAsync = async (fastify) => {
   );
 
   // GET /api/v1/students/:studentId/departments - departments for a student
+  // (the student themselves, their teachers, or an admin)
   fastify.get(
     '/students/:studentId/departments',
     { preHandler: [authenticate] },
     async (request, reply) => {
       const req = request as AuthRequest;
-      const departments = await getDepartmentsByStudent((req.params as { studentId: string }).studentId);
+      const studentId = (req.params as { studentId: string }).studentId;
+      const visible = await visibleStudentIds(req.user);
+      if (visible !== 'all' && !visible.has(studentId)) {
+        return reply
+          .code(403)
+          .send({ error: { code: 'FORBIDDEN', message: 'You do not have access to this student' } });
+      }
+      const departments = await getDepartmentsByStudent(studentId);
       return reply.send({ data: departments });
     }
   );

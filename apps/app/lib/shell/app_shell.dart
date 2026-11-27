@@ -29,6 +29,21 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
     final nav = navForRole(user?.role);
+    void open() => showCommandPalette(context, [
+          for (final d in nav.all)
+            PaletteItem(
+              label: d.label,
+              icon: d.icon,
+              hint: 'Go to ${d.label}',
+              onSelect: () => _go(d),
+            ),
+        ]);
+    return PaletteShortcut(onOpen: open, child: _layout(context, open));
+  }
+
+  Widget _layout(BuildContext context, VoidCallback onSearch) {
+    final user = context.watch<AuthProvider>().user;
+    final nav = navForRole(user?.role);
     final current = kDestinations[navigationShell.currentIndex];
     final size = context.windowSize;
 
@@ -36,13 +51,15 @@ class AppShell extends StatelessWidget {
       title: current.label,
       showBrand: size == WindowSize.compact,
       onProfile: () => _go(profile),
+      onSearch: onSearch,
     );
 
     if (size == WindowSize.compact) {
       final primaryIndex = nav.primary.indexOf(current);
       return Scaffold(
         appBar: topBar,
-        body: navigationShell,
+        body: SwitchFade(
+            token: navigationShell.currentIndex, child: navigationShell),
         bottomNavigationBar: NavigationBar(
           selectedIndex: primaryIndex >= 0 ? primaryIndex : nav.primary.length,
           onDestinationSelected: (i) {
@@ -72,24 +89,39 @@ class AppShell extends StatelessWidget {
 
     final all = nav.all;
     final selected = all.indexOf(current);
+    final c = context.colors;
     final sideNav = size == WindowSize.medium
-        ? NavigationRail(
-            selectedIndex: selected >= 0 ? selected : null,
-            onDestinationSelected: (i) => _go(all[i]),
-            labelType: NavigationRailLabelType.all,
-            leading: const Padding(
-              padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: BrandMark(showName: false),
+        ? Theme(
+            data: Theme.of(context).copyWith(
+              navigationRailTheme: NavigationRailThemeData(
+                backgroundColor: c.ink,
+                indicatorColor: c.accent,
+                indicatorShape: const StadiumBorder(),
+                selectedIconTheme: IconThemeData(color: c.onAccent),
+                unselectedIconTheme: IconThemeData(color: c.onInk),
+                selectedLabelTextStyle: context.text.labelMedium
+                    ?.copyWith(color: c.onInk, fontWeight: FontWeight.w700),
+                unselectedLabelTextStyle: context.text.labelMedium
+                    ?.copyWith(color: c.onInk.withValues(alpha: 0.7)),
+              ),
             ),
-            destinations: [
-              for (final d in all)
-                NavigationRailDestination(
-                  icon: Icon(d.icon, key: d.navKey),
-                  selectedIcon: Icon(d.selectedIcon),
-                  label: Text(d.label),
-                ),
-            ],
-          )
+            child: NavigationRail(
+              selectedIndex: selected >= 0 ? selected : null,
+              onDestinationSelected: (i) => _go(all[i]),
+              labelType: NavigationRailLabelType.all,
+              leading: const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                child: BrandMark(showName: false),
+              ),
+              destinations: [
+                for (final d in all)
+                  NavigationRailDestination(
+                    icon: Icon(d.icon, key: d.navKey),
+                    selectedIcon: Icon(d.selectedIcon),
+                    label: Text(d.label),
+                  ),
+              ],
+            ))
         : _Sidebar(
             nav: nav,
             current: current,
@@ -100,9 +132,12 @@ class AppShell extends StatelessWidget {
       body: Row(
         children: [
           sideNav,
-          VerticalDivider(width: 1, color: context.colors.border),
           Expanded(
-            child: Scaffold(appBar: topBar, body: navigationShell),
+            child: Scaffold(
+              appBar: topBar,
+              body: SwitchFade(
+                  token: navigationShell.currentIndex, child: navigationShell),
+            ),
           ),
         ],
       ),
@@ -157,82 +192,26 @@ class _Sidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     final user = context.watch<AuthProvider>().user;
-
-    Widget item(AppDestination d) {
-      final selected = d == current;
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Material(
-          color: selected ? c.accentSoft : c.surface,
-          borderRadius: AppRadius.mdAll,
-          child: InkWell(
-            key: d.navKey,
-            borderRadius: AppRadius.mdAll,
-            onTap: () => onSelect(d),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
-              child: Row(
-                children: [
-                  Icon(selected ? d.selectedIcon : d.icon,
-                      size: 20, color: selected ? c.accentText : c.textMuted),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    d.label,
-                    style: context.text.labelLarge?.copyWith(
-                      color: selected ? c.accentText : c.textSecondary,
-                      fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return Container(
-      width: 248,
-      color: c.surface,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(
-                  AppSpacing.xs, AppSpacing.xs, 0, AppSpacing.lg),
-              child: Align(alignment: Alignment.centerLeft, child: BrandMark()),
-            ),
-            Expanded(
-              child: ListView(
-                children: [
-                  for (final d in nav.primary) item(d),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.sm, AppSpacing.md, 0, AppSpacing.xs),
-                    child: Text('MORE', style: context.text.labelSmall),
-                  ),
-                  for (final d in nav.more) item(d),
-                ],
-              ),
-            ),
-            if (user != null)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: ListRow(
-                  leading: Avatar(name: user.displayName),
-                  title: user.displayName,
-                  subtitle: roleLabel(user.role),
-                  onTap: () => onSelect(profile),
-                ),
-              ),
-          ],
-        ),
-      ),
+    final all = [...nav.primary, ...nav.more];
+    SidebarItem item(AppDestination d) => SidebarItem(
+          label: d.label,
+          icon: d.icon,
+          selectedIcon: d.selectedIcon,
+          itemKey: d.navKey,
+        );
+    return InkSidebar(
+      groups: [
+        SidebarGroup(items: [for (final d in nav.primary) item(d)]),
+        if (nav.more.isNotEmpty)
+          SidebarGroup(
+              title: 'More', items: [for (final d in nav.more) item(d)]),
+      ],
+      selected: all.indexOf(current),
+      onSelect: (i) => onSelect(all[i]),
+      userName: user?.displayName,
+      userRole: user == null ? null : roleLabel(user.role),
+      onProfile: () => onSelect(profile),
     );
   }
 }
@@ -245,11 +224,13 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
     required this.title,
     required this.showBrand,
     required this.onProfile,
+    required this.onSearch,
   });
 
   final String title;
   final bool showBrand;
   final VoidCallback onProfile;
+  final VoidCallback onSearch;
 
   @override
   Size get preferredSize => const Size.fromHeight(60);
@@ -275,9 +256,13 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
           : Text(title),
       actions: [
         IconButton(
-          key: const Key('appbar-notifications'),
-          tooltip: 'Upcoming',
-          icon: const Icon(Icons.notifications_none_rounded),
+          key: const Key('appbar-search'),
+          tooltip: 'Search (Ctrl+K)',
+          icon: const Icon(Icons.search_rounded),
+          onPressed: onSearch,
+        ),
+        _BellButton(
+          userId: user?.id,
           onPressed: () => _showUpcoming(context, user?.id),
         ),
         PopupMenuButton<String>(
@@ -354,6 +339,92 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
+/// The notifications bell. A small orange dot appears when something is due
+/// within a day; it pulses a few times to catch the eye, then rests.
+class _BellButton extends StatefulWidget {
+  const _BellButton({required this.userId, required this.onPressed});
+
+  final String? userId;
+  final VoidCallback onPressed;
+
+  @override
+  State<_BellButton> createState() => _BellButtonState();
+}
+
+class _BellButtonState extends State<_BellButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 700));
+  bool _due = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _check();
+  }
+
+  Future<void> _check() async {
+    try {
+      final events = await ApiService.instance.getCalendar(widget.userId);
+      final now = DateTime.now();
+      final soon = events.any((e) =>
+          !e.startsAt.isBefore(now) &&
+          e.startsAt.isBefore(now.add(const Duration(hours: 24))));
+      if (!mounted || !soon) return;
+      setState(() => _due = true);
+      if (!AppMotion.reduced(context)) _pulse.repeat(reverse: true, count: 6);
+    } catch (_) {
+      // The bell is decoration; the sheet reports errors itself.
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return IconButton(
+      key: const Key('appbar-notifications'),
+      tooltip: 'Upcoming',
+      onPressed: widget.onPressed,
+      icon: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          const Icon(Icons.notifications_none_rounded),
+          if (_due)
+            Positioned(
+              right: 0,
+              top: 0,
+              child: AnimatedBuilder(
+                animation: _pulse,
+                builder: (context, _) => Container(
+                  width: 9,
+                  height: 9,
+                  decoration: BoxDecoration(
+                    color: c.accent,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: c.surface, width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: c.accentGlow,
+                        blurRadius: 2 + 8 * _pulse.value,
+                        spreadRadius: 3 * _pulse.value,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MenuRow extends StatelessWidget {
   const _MenuRow({required this.icon, required this.label});
 
@@ -411,6 +482,7 @@ class _UpcomingSheetState extends State<_UpcomingSheet> {
                 if (events.isEmpty) {
                   return const EmptyState(
                     icon: Icons.notifications_off_outlined,
+                    illustration: IllustrationKind.caughtUp,
                     title: 'You\'re all caught up',
                     message: 'No upcoming classes or deadlines.',
                   );

@@ -404,14 +404,18 @@ class _MonthGrid extends StatelessWidget {
                           key: Key('day-${day.year}-${day.month}-${day.day}'),
                           borderRadius: AppRadius.mdAll,
                           onTap: () => onSelect(day),
-                          child: Container(
+                          child: AnimatedContainer(
+                            duration: AppMotion.of(context, AppMotion.fast),
+                            curve: AppMotion.standard,
                             height: 48,
                             decoration: BoxDecoration(
-                              color: isSelected ? c.accent : null,
-                              borderRadius: AppRadius.mdAll,
-                              border: isToday && !isSelected
-                                  ? Border.all(color: c.accent)
-                                  : null,
+                              // Today is ink, the picked day is the orange spark.
+                              color: isSelected
+                                  ? c.accent
+                                  : isToday
+                                      ? c.ink
+                                      : null,
+                              borderRadius: AppRadius.pillAll,
                             ),
                             // Narrow phones with large text: shrink the
                             // cell's content rather than overflow it.
@@ -425,10 +429,12 @@ class _MonthGrid extends StatelessWidget {
                                     style: context.text.labelLarge?.copyWith(
                                       color: isSelected
                                           ? c.onAccent
-                                          : inMonth
-                                              ? c.textPrimary
-                                              : c.textMuted
-                                                  .withValues(alpha: 0.5),
+                                          : isToday
+                                              ? c.onInk
+                                              : inMonth
+                                                  ? c.textPrimary
+                                                  : c.textMuted
+                                                      .withValues(alpha: 0.5),
                                       fontWeight: isToday || isSelected
                                           ? FontWeight.w700
                                           : FontWeight.w500,
@@ -447,7 +453,9 @@ class _MonthGrid extends StatelessWidget {
                                           decoration: BoxDecoration(
                                             color: isSelected
                                                 ? c.onAccent
-                                                : c.fg(eventTone(e.kind)),
+                                                : isToday
+                                                    ? c.onInk
+                                                    : c.fg(eventTone(e.kind)),
                                             shape: BoxShape.circle,
                                           ),
                                         ),

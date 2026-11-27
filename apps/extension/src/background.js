@@ -12,6 +12,7 @@ import {
   aiTabSwitchEvent,
   applyEvents,
   buildBatch,
+  chunkEvents,
   classifyUploadResponse,
   computeScore,
   createLock,
@@ -32,6 +33,7 @@ import {
   retryDelayMs,
   sanitizeContentEvents,
   signBatch,
+  splitBatch,
   DEFAULT_API_BASE_URL,
 } from "./lib.js";
 
@@ -243,13 +245,17 @@ async function enqueueBatches(settings, auth) {
       continue;
     }
 
-    const batch = buildBatch({
-      studentId: auth.studentId,
-      assignmentId,
-      sessionId: bucket.sessionId,
-      events: bucket.events,
-    });
-    queue.push({ batch, attempts: 0, nextAttemptAt: 0, signatureFailures: 0 });
+    // Several modest batches rather than one huge one: a backlog built up
+    // while signed out can hold thousands of events.
+    for (const events of chunkEvents(bucket.events)) {
+      const batch = buildBatch({
+        studentId: auth.studentId,
+        assignmentId,
+        sessionId: bucket.sessionId,
+        events,
+      });
+      queue.push({ batch, attempts: 0, nextAttemptAt: 0, signatureFailures: 0 });
+    }
     delete pending[tabId];
   }
 
@@ -305,6 +311,21 @@ async function applyOutcome(batchId, outcome, status, auth) {
         queue.splice(index, 1);
         patch.lastError = "Batch dropped: signature rejected";
       }
+    }
+  } else if (outcome === "split") {
+    // Too large for the API: replace it with two halves, uploaded next.
+    const halves = item ? splitBatch(item.batch) : null;
+    if (halves) {
+      queue.splice(
+        index,
+        1,
+        ...halves.map((batch) => ({ batch, attempts: 0, nextAttemptAt: 0, signatureFailures: 0 })),
+      );
+    } else {
+      if (item) {
+        queue.splice(index, 1);
+      }
+      patch.lastError = "Batch dropped: too large to upload";
     }
   } else if (outcome === "drop") {
     if (item) {

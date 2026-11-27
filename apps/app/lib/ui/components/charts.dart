@@ -1,3 +1,4 @@
+import 'package:edtech_app/ui/motion.dart';
 import 'dart:math' as math;
 
 import 'package:edtech_app/ui/tokens.dart';
@@ -35,14 +36,20 @@ class BarChart extends StatelessWidget {
       child: SizedBox(
         height: height,
         width: double.infinity,
-        child: CustomPaint(
-          painter: _BarPainter(
-            labels: labels,
-            values: values,
-            colors: colors ?? List.filled(values.length, c.accent),
-            maxValue: maxValue,
-            grid: c.border,
-            labelStyle: label.copyWith(color: c.textMuted),
+        // Bars grow up from the baseline, each starting a beat after the last.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: AppMotion.of(context, AppMotion.slow * 2),
+          builder: (context, grow, _) => CustomPaint(
+            painter: _BarPainter(
+              labels: labels,
+              values: values,
+              colors: colors ?? List.filled(values.length, c.accent),
+              maxValue: maxValue,
+              grid: c.border,
+              labelStyle: label.copyWith(color: c.textMuted),
+              grow: grow,
+            ),
           ),
         ),
       ),
@@ -58,6 +65,7 @@ class _BarPainter extends CustomPainter {
     required this.maxValue,
     required this.grid,
     required this.labelStyle,
+    this.grow = 1,
   });
 
   final List<String> labels;
@@ -66,6 +74,9 @@ class _BarPainter extends CustomPainter {
   final double? maxValue;
   final Color grid;
   final TextStyle labelStyle;
+
+  /// 0 → 1 entrance progress.
+  final double grow;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -85,7 +96,10 @@ class _BarPainter extends CustomPainter {
     final slot = size.width / values.length;
     final barW = math.min(slot * 0.56, 36.0);
     for (var i = 0; i < values.length; i++) {
-      final h = (values[i] / top).clamp(0.0, 1.0) * chartH;
+      final start = 0.5 * i / values.length;
+      final t = Curves.easeOutCubic
+          .transform(((grow - start) / (1 - 0.5)).clamp(0.0, 1.0));
+      final h = (values[i] / top).clamp(0.0, 1.0) * chartH * t;
       final x = slot * i + (slot - barW) / 2;
       final rect = RRect.fromRectAndCorners(
         Rect.fromLTWH(x, chartH - h, barW, h),
@@ -109,7 +123,10 @@ class _BarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_BarPainter old) =>
-      old.values != values || old.colors != colors || old.grid != grid;
+      old.values != values ||
+      old.colors != colors ||
+      old.grid != grid ||
+      old.grow != grow;
 }
 
 /// Ring chart of proportions with a centred caption.
