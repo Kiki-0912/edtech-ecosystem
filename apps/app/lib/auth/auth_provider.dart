@@ -93,8 +93,11 @@ class AuthProvider extends ChangeNotifier {
     _setLoading(true);
     _error = null;
     try {
-      final data =
-          await _api.login(phone: phone, email: email, password: password);
+      final data = await _api.login(
+        phone: phone,
+        email: email,
+        password: password,
+      );
       _user = User.fromJson(data['user'] as Map<String, dynamic>);
       _token = data['token'] as String;
       await _persist();
@@ -138,9 +141,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> sendSmsCode({
-    required String phone,
-  }) async {
+  Future<bool> sendSmsCode({required String phone}) async {
     _setLoading(true);
     _error = null;
     try {
@@ -176,9 +177,7 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> getMe({
-    required String token,
-  }) async {
+  Future<bool> getMe({required String token}) async {
     _setLoading(true);
     _error = null;
     try {

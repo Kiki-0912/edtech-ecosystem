@@ -42,9 +42,14 @@ class _CoursesScreenState extends State<CoursesScreen> {
     try {
       final results = await Future.wait([api.getCourses(), api.getCollege()]);
       final all = results[0] as List<Course>;
-      final courses = user == null ? all : myCourses(user, all);
-      final assignments = await Future.wait(courses.map(
-          (c) => api.getAssignments(c.id).catchError((_) => <Assignment>[])));
+      final courses = (user == null ? all : myCourses(user, all))
+        ..sort(
+            (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+      final assignments = await Future.wait(
+        courses.map(
+          (c) => api.getAssignments(c.id).catchError((_) => <Assignment>[]),
+        ),
+      );
       final now = DateTime.now();
       final nextDue = <String, DateTime>{};
       for (var i = 0; i < courses.length; i++) {
@@ -75,10 +80,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return _courses;
     return _courses
-        .where((c) =>
-            c.title.toLowerCase().contains(q) ||
-            c.code.toLowerCase().contains(q) ||
-            (c.teacherName ?? '').toLowerCase().contains(q))
+        .where(
+          (c) =>
+              c.title.toLowerCase().contains(q) ||
+              c.code.toLowerCase().contains(q) ||
+              (c.teacherName ?? '').toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -106,10 +113,12 @@ class _CoursesScreenState extends State<CoursesScreen> {
           error: _error,
           onRetry: _load,
           isEmpty: filtered.isEmpty,
-          skeleton: ResponsiveGrid(children: [
-            for (var i = 0; i < 3; i++)
-              const Skeleton(height: 150, radius: AppRadius.lg),
-          ]),
+          skeleton: ResponsiveGrid(
+            children: [
+              for (var i = 0; i < 3; i++)
+                const Skeleton(height: 150, radius: AppRadius.lg),
+            ],
+          ),
           empty: _query.isNotEmpty
               ? EmptyState(
                   icon: Icons.search_off_rounded,
@@ -158,29 +167,35 @@ class CourseCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(course.title,
-              style: context.text.titleMedium,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis),
+          Text(
+            course.title,
+            style: context.text.titleMedium,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
           const SizedBox(height: AppSpacing.xxs),
-          Text(course.teacherName ?? 'Teacher to be assigned',
-              style: context.text.bodyMedium),
+          Text(
+            course.teacherName ?? 'Teacher to be assigned',
+            style: context.text.bodyMedium,
+          ),
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.md,
             runSpacing: AppSpacing.xs,
             children: [
               _Meta(
-                  icon: Icons.groups_outlined,
-                  text: '${course.studentCount} students'),
+                icon: Icons.groups_outlined,
+                text: '${course.studentCount} students',
+              ),
               _Meta(
                 icon: Icons.assignment_outlined,
                 text: open == 0 ? 'No open work' : '$open open',
               ),
               if (nextDue != null)
                 _Meta(
-                    icon: Icons.event_outlined,
-                    text: 'Next due ${dayMonth(nextDue!)}'),
+                  icon: Icons.event_outlined,
+                  text: 'Next due ${dayMonth(nextDue!)}',
+                ),
             ],
           ),
         ],
@@ -224,21 +239,32 @@ class _ProgrammesSection extends StatelessWidget {
           key: const Key('programmes'),
           tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           childrenPadding: const EdgeInsets.fromLTRB(
-              AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
-          title: Text('Programmes at ${college.shortName}',
-              style: context.text.titleMedium),
+            AppSpacing.md,
+            0,
+            AppSpacing.md,
+            AppSpacing.md,
+          ),
+          title: Text(
+            'Programmes at ${college.shortName}',
+            style: context.text.titleMedium,
+          ),
           subtitle: Text(
-              '${college.departmentCount} programmes · ${college.name}',
-              style: context.text.bodySmall),
+            '${college.departmentCount} programmes · ${college.name}',
+            style: context.text.bodySmall,
+          ),
           children: [
             for (final entry in groups.entries) ...[
               Align(
                 alignment: Alignment.centerLeft,
                 child: Padding(
                   padding: const EdgeInsets.only(
-                      top: AppSpacing.sm, bottom: AppSpacing.xs),
-                  child: Text(entry.key.toUpperCase(),
-                      style: context.text.labelSmall),
+                    top: AppSpacing.sm,
+                    bottom: AppSpacing.xs,
+                  ),
+                  child: Text(
+                    entry.key.toUpperCase(),
+                    style: context.text.labelSmall,
+                  ),
                 ),
               ),
               ResponsiveGrid(

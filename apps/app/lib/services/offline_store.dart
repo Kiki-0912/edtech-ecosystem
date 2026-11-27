@@ -311,7 +311,7 @@ class OfflineStore {
     _submissions = [
       for (final (student, effort) in [
         ('u-student-1', 79),
-        ('u-student-2', 68)
+        ('u-student-2', 68),
       ])
         {
           'id': 'sub-a1-$student',
@@ -443,9 +443,11 @@ class OfflineStore {
   Future<List<Map<String, dynamic>>> getStudents() async {
     await _ensureLoaded();
     final rows = _students.map((s) => Map<String, dynamic>.from(s)).toList();
-    rows.sort((a, b) => (a['displayName'] ?? '')
-        .toString()
-        .compareTo((b['displayName'] ?? '').toString()));
+    rows.sort(
+      (a, b) => (a['displayName'] ?? '').toString().compareTo(
+            (b['displayName'] ?? '').toString(),
+          ),
+    );
     return rows;
   }
 
@@ -533,8 +535,10 @@ class OfflineStore {
   Future<List<Map<String, dynamic>>> getDepartments() async {
     await _ensureLoaded();
     final rows = _departments.map((d) => Map<String, dynamic>.from(d)).toList();
-    rows.sort((a, b) =>
-        (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()));
+    rows.sort(
+      (a, b) =>
+          (a['name'] ?? '').toString().compareTo((b['name'] ?? '').toString()),
+    );
     return rows;
   }
 
@@ -560,7 +564,9 @@ class OfflineStore {
   }
 
   Future<Map<String, dynamic>?> updateDepartment(
-      String id, Map<String, dynamic> changes) async {
+    String id,
+    Map<String, dynamic> changes,
+  ) async {
     await _ensureLoaded();
     final index = _departments.indexWhere((d) => d['id'] == id);
     if (index < 0) return null;
@@ -586,7 +592,8 @@ class OfflineStore {
   }
 
   Future<List<Map<String, dynamic>>> getStudentsByDepartment(
-      String departmentId) async {
+    String departmentId,
+  ) async {
     await _ensureLoaded();
     final ids = _enrollments
         .where((e) => e['departmentId'] == departmentId)
@@ -599,7 +606,8 @@ class OfflineStore {
   }
 
   Future<List<Map<String, dynamic>>> getStudentDepartments(
-      String studentId) async {
+    String studentId,
+  ) async {
     await _ensureLoaded();
     final ids = _enrollments
         .where((e) => e['studentId'] == studentId)
@@ -620,8 +628,10 @@ class OfflineStore {
   }) async {
     await _ensureLoaded();
     final existing = _enrollments
-        .where((e) =>
-            e['studentId'] == studentId && e['departmentId'] == departmentId)
+        .where(
+          (e) =>
+              e['studentId'] == studentId && e['departmentId'] == departmentId,
+        )
         .firstOrNull;
     if (existing != null) return Map<String, dynamic>.from(existing);
     final enrollment = <String, dynamic>{
@@ -648,7 +658,8 @@ class OfflineStore {
   }
 
   Future<List<Map<String, dynamic>>> getStudentsByCourse(
-      String courseId) async {
+    String courseId,
+  ) async {
     await _ensureLoaded();
     return _students
         .where((s) {
@@ -676,8 +687,10 @@ class OfflineStore {
         })
         .map((r) => Map<String, dynamic>.from(r))
         .toList();
-    rows.sort((a, b) =>
-        (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()));
+    rows.sort(
+      (a, b) =>
+          (b['date'] ?? '').toString().compareTo((a['date'] ?? '').toString()),
+    );
     return rows;
   }
 
@@ -729,14 +742,16 @@ class OfflineStore {
   }) async {
     final results = <Map<String, dynamic>>[];
     for (final record in records) {
-      results.add(await markAttendance(
-        courseId: courseId,
-        studentId: record['studentId']?.toString() ?? '',
-        date: date,
-        status: record['status']?.toString() ?? 'absent',
-        notes: record['notes']?.toString() ?? '',
-        markedBy: markedBy,
-      ));
+      results.add(
+        await markAttendance(
+          courseId: courseId,
+          studentId: record['studentId']?.toString() ?? '',
+          date: date,
+          status: record['status']?.toString() ?? 'absent',
+          notes: record['notes']?.toString() ?? '',
+          markedBy: markedBy,
+        ),
+      );
     }
     return results;
   }
@@ -776,19 +791,20 @@ class OfflineStore {
         .where((n) {
           if (courseId != null && n['courseId'] != courseId) return false;
           if (courseCode != null &&
-              !(n['courseCode'] ?? '')
-                  .toString()
-                  .toLowerCase()
-                  .contains(courseCode.toLowerCase())) {
+              !(n['courseCode'] ?? '').toString().toLowerCase().contains(
+                    courseCode.toLowerCase(),
+                  )) {
             return false;
           }
           return true;
         })
         .map((n) => Map<String, dynamic>.from(n))
         .toList();
-    rows.sort((a, b) => (b['createdAt'] ?? '')
-        .toString()
-        .compareTo((a['createdAt'] ?? '').toString()));
+    rows.sort(
+      (a, b) => (b['createdAt'] ?? '').toString().compareTo(
+            (a['createdAt'] ?? '').toString(),
+          ),
+    );
     return rows;
   }
 
@@ -877,9 +893,11 @@ class OfflineStore {
         })
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
-    rows.sort((a, b) => (a['startsAt'] ?? '')
-        .toString()
-        .compareTo((b['startsAt'] ?? '').toString()));
+    rows.sort(
+      (a, b) => (a['startsAt'] ?? '').toString().compareTo(
+            (b['startsAt'] ?? '').toString(),
+          ),
+    );
     return rows;
   }
 
@@ -1018,7 +1036,7 @@ class OfflineStore {
     return {
       'imported': imported.length,
       'errors': errors,
-      'students': imported
+      'students': imported,
     };
   }
 
@@ -1031,13 +1049,15 @@ class OfflineStore {
             return ids.contains(courseId);
           });
     final rows = students
-        .map((s) => {
-              'name': s['displayName'],
-              'rollNumber': s['rollNumber'] ?? s['id'],
-              'contact': s['phone'],
-              'email': s['email'],
-              'courseIds': jsonEncode(s['courseIds'] ?? const []),
-            })
+        .map(
+          (s) => {
+            'name': s['displayName'],
+            'rollNumber': s['rollNumber'] ?? s['id'],
+            'contact': s['phone'],
+            'email': s['email'],
+            'courseIds': jsonEncode(s['courseIds'] ?? const []),
+          },
+        )
         .toList();
     return {
       'headers': ['name', 'rollNumber', 'contact', 'email', 'courseIds'],
@@ -1052,15 +1072,17 @@ class OfflineStore {
     await _ensureLoaded();
     final records = await getAttendanceRecords(courseId: courseId, date: date);
     final rows = records
-        .map((r) => {
-              'id': r['id'],
-              'courseId': r['courseId'],
-              'studentId': r['studentId'],
-              'date': r['date'],
-              'status': r['status'],
-              'markedBy': r['markedBy'],
-              'notes': r['notes'],
-            })
+        .map(
+          (r) => {
+            'id': r['id'],
+            'courseId': r['courseId'],
+            'studentId': r['studentId'],
+            'date': r['date'],
+            'status': r['status'],
+            'markedBy': r['markedBy'],
+            'notes': r['notes'],
+          },
+        )
         .toList();
     return {
       'headers': [
@@ -1070,7 +1092,7 @@ class OfflineStore {
         'date',
         'status',
         'markedBy',
-        'notes'
+        'notes',
       ],
       'rows': rows,
     };
@@ -1081,20 +1103,24 @@ class OfflineStore {
     String? courseCode,
   }) async {
     await _ensureLoaded();
-    final notes =
-        await getTeacherNotes(courseId: courseId, courseCode: courseCode);
+    final notes = await getTeacherNotes(
+      courseId: courseId,
+      courseCode: courseCode,
+    );
     final rows = notes
-        .map((n) => {
-              'id': n['id'],
-              'courseId': n['courseId'],
-              'bookName': n['bookName'],
-              'courseCode': n['courseCode'],
-              'title': n['title'],
-              'content': n['content'],
-              'authorId': n['authorId'],
-              'createdAt': n['createdAt'],
-              'updatedAt': n['updatedAt'],
-            })
+        .map(
+          (n) => {
+            'id': n['id'],
+            'courseId': n['courseId'],
+            'bookName': n['bookName'],
+            'courseCode': n['courseCode'],
+            'title': n['title'],
+            'content': n['content'],
+            'authorId': n['authorId'],
+            'createdAt': n['createdAt'],
+            'updatedAt': n['updatedAt'],
+          },
+        )
         .toList();
     return {
       'headers': [
@@ -1106,7 +1132,7 @@ class OfflineStore {
         'content',
         'authorId',
         'createdAt',
-        'updatedAt'
+        'updatedAt',
       ],
       'rows': rows,
     };
@@ -1160,8 +1186,9 @@ class OfflineStore {
   }) async {
     await _ensureLoaded();
     final now = DateTime.now().toIso8601String();
-    final index = _submissions.indexWhere((s) =>
-        s['assignmentId'] == assignmentId && s['studentId'] == studentId);
+    final index = _submissions.indexWhere(
+      (s) => s['assignmentId'] == assignmentId && s['studentId'] == studentId,
+    );
     final submission = <String, dynamic>{
       'id': index >= 0 ? _submissions[index]['id'] : _id('sub'),
       'assignmentId': assignmentId,
@@ -1209,9 +1236,11 @@ class OfflineStore {
         },
       ];
     }
-    rows.sort((a, b) => (a['sentAt'] ?? '')
-        .toString()
-        .compareTo((b['sentAt'] ?? '').toString()));
+    rows.sort(
+      (a, b) => (a['sentAt'] ?? '').toString().compareTo(
+            (b['sentAt'] ?? '').toString(),
+          ),
+    );
     return rows;
   }
 

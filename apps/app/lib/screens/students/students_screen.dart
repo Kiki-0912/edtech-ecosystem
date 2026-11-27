@@ -48,7 +48,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
         students =
             students.where((s) => _courseIds(s).any(ids.contains)).toList();
       }
-      students.sort((a, b) => _name(a).compareTo(_name(b)));
+      students.sort(
+        (a, b) => _name(a).toLowerCase().compareTo(_name(b).toLowerCase()),
+      );
       if (!mounted) return;
       setState(() {
         _students = students;
@@ -68,7 +70,8 @@ class _StudentsScreenState extends State<StudentsScreen> {
       s['displayName']?.toString() ?? '';
 
   static List<String> _courseIds(Map<String, dynamic> s) => List<String>.from(
-      (s['courseIds'] as List?)?.map((e) => e.toString()) ?? const <String>[]);
+        (s['courseIds'] as List?)?.map((e) => e.toString()) ?? const <String>[],
+      );
 
   List<Map<String, dynamic>> get _filtered {
     final q = _query.trim().toLowerCase();
@@ -77,8 +80,12 @@ class _StudentsScreenState extends State<StudentsScreen> {
         return false;
       }
       if (q.isEmpty) return true;
-      return [s['displayName'], s['email'], s['phone'], s['rollNumber']]
-          .any((v) => (v?.toString().toLowerCase() ?? '').contains(q));
+      return [
+        s['displayName'],
+        s['email'],
+        s['phone'],
+        s['rollNumber'],
+      ].any((v) => (v?.toString().toLowerCase() ?? '').contains(q));
     }).toList();
   }
 
@@ -99,8 +106,10 @@ class _StudentsScreenState extends State<StudentsScreen> {
     if (saved == true) {
       if (mounted) {
         showToast(
-            context, student == null ? 'Student added' : 'Student updated',
-            kind: ToastKind.success);
+          context,
+          student == null ? 'Student added' : 'Student updated',
+          kind: ToastKind.success,
+        );
       }
       await _load();
     }
@@ -160,8 +169,9 @@ class _StudentsScreenState extends State<StudentsScreen> {
           onPressed: () => showCsvExport(
             context,
             title: 'Export students',
-            load: () => ApiService.instance
-                .exportStudentsToExcel(courseId: _courseFilter),
+            load: () => ApiService.instance.exportStudentsToExcel(
+              courseId: _courseFilter,
+            ),
           ),
           icon: const Icon(Icons.download_rounded, size: 18),
           label: const Text('Export'),
@@ -246,7 +256,11 @@ class _TableHeader extends StatelessWidget {
     final style = context.text.labelSmall;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md, AppSpacing.xs, AppSpacing.md, AppSpacing.xs),
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        AppSpacing.xs,
+      ),
       child: Row(
         children: [
           Expanded(flex: 4, child: Text('NAME', style: style)),
@@ -301,8 +315,11 @@ class _StudentRow extends StatelessWidget {
         child: ListRow(
           leading: Avatar(name: name),
           title: name,
-          subtitle:
-              [roll, phone, courses].where((s) => s.isNotEmpty).join(' · '),
+          subtitle: [
+            roll,
+            phone,
+            courses,
+          ].where((s) => s.isNotEmpty).join(' · '),
           trailing: menu,
         ),
       );
@@ -310,7 +327,9 @@ class _StudentRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
       child: Row(
         children: [
           Expanded(
@@ -320,9 +339,11 @@ class _StudentRow extends StatelessWidget {
                 Avatar(name: name, size: 32),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text(name,
-                      style: context.text.titleSmall,
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    name,
+                    style: context.text.titleSmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
@@ -335,17 +356,22 @@ class _StudentRow extends StatelessWidget {
               children: [
                 Text(phone, style: context.text.bodyMedium),
                 if (email.isNotEmpty)
-                  Text(email,
-                      style: context.text.bodySmall,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    email,
+                    style: context.text.bodySmall,
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ],
             ),
           ),
           Expanded(
-              flex: 2,
-              child: Text(courses,
-                  style: context.text.bodyMedium,
-                  overflow: TextOverflow.ellipsis)),
+            flex: 2,
+            child: Text(
+              courses,
+              style: context.text.bodyMedium,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           menu,
         ],
       ),
@@ -465,12 +491,16 @@ class _StudentFormState extends State<_StudentForm> {
               decoration: const InputDecoration(labelText: 'Course'),
               items: [
                 const DropdownMenuItem<String?>(
-                    value: null, child: Text('None')),
+                  value: null,
+                  child: Text('None'),
+                ),
                 for (final c in widget.courses)
                   DropdownMenuItem<String?>(
                     value: c.id,
-                    child: Text('${c.code} · ${c.title}',
-                        overflow: TextOverflow.ellipsis),
+                    child: Text(
+                      '${c.code} · ${c.title}',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
               ],
               onChanged: (v) => setState(() => _courseId = v),
@@ -495,7 +525,9 @@ class _StudentFormState extends State<_StudentForm> {
 /// Opens the paste-a-CSV student import form (also used by the admin console).
 /// Returns the API's import result, or null when dismissed.
 Future<Map<String, dynamic>?> showStudentImport(
-        BuildContext context, List<Course> courses) =>
+  BuildContext context,
+  List<Course> courses,
+) =>
     showFormSheet<Map<String, dynamic>>(
       context,
       title: 'Import students',
@@ -532,8 +564,10 @@ class _ImportFormState extends State<_ImportForm> {
   void initState() {
     super.initState();
     _courseId = widget.courses.firstOrNull?.id;
-    _csv.addListener(() =>
-        setState(() => _rows = parseCsvRecords(_csv.text, aliases: _aliases)));
+    _csv.addListener(
+      () =>
+          setState(() => _rows = parseCsvRecords(_csv.text, aliases: _aliases)),
+    );
   }
 
   @override
@@ -562,10 +596,12 @@ class _ImportFormState extends State<_ImportForm> {
   @override
   Widget build(BuildContext context) {
     final valid = _rows
-        .where((r) =>
-            (r['name'] ?? '').isNotEmpty &&
-            (r['rollNumber'] ?? '').isNotEmpty &&
-            (r['contact'] ?? '').isNotEmpty)
+        .where(
+          (r) =>
+              (r['name'] ?? '').isNotEmpty &&
+              (r['rollNumber'] ?? '').isNotEmpty &&
+              (r['contact'] ?? '').isNotEmpty,
+        )
         .length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -584,9 +620,12 @@ class _ImportFormState extends State<_ImportForm> {
           items: [
             for (final c in widget.courses)
               DropdownMenuItem(
-                  value: c.id,
-                  child: Text('${c.code} · ${c.title}',
-                      overflow: TextOverflow.ellipsis)),
+                value: c.id,
+                child: Text(
+                  '${c.code} · ${c.title}',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
           ],
           onChanged: (v) => setState(() => _courseId = v),
         ),

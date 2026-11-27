@@ -118,7 +118,8 @@ class HomeData {
         studentCount: courses.fold(0, (sum, c) => sum + c.studentCount),
         // Rosters are visible to the course's own teacher only.
         progress: await _progressFor(
-            courses.where((c) => c.teacherId == user.id).toList()),
+          courses.where((c) => c.teacherId == user.id).toList(),
+        ),
       );
     }
 
@@ -130,11 +131,13 @@ class HomeData {
   }
 
   static Future<List<AssignmentProgress>> _progressFor(
-      List<Course> courses) async {
+    List<Course> courses,
+  ) async {
     final api = ApiService.instance;
     final out = <AssignmentProgress>[];
-    final perCourse =
-        await Future.wait(courses.map((c) => api.getAssignments(c.id)));
+    final perCourse = await Future.wait(
+      courses.map((c) => api.getAssignments(c.id)),
+    );
     final open = <(Assignment, Course)>[
       for (var i = 0; i < courses.length; i++)
         for (final a in perCourse[i])
@@ -142,17 +145,20 @@ class HomeData {
     ]..sort((x, y) => x.$1.dueAt.compareTo(y.$1.dueAt));
 
     final rosters = await Future.wait(
-        open.take(5).map((pair) => api.getRoster(pair.$1.id)));
+      open.take(5).map((pair) => api.getRoster(pair.$1.id)),
+    );
     for (var i = 0; i < rosters.length; i++) {
       final roster = rosters[i];
-      out.add(AssignmentProgress(
-        assignment: open[i].$1,
-        course: open[i].$2,
-        submitted: roster
-            .where((r) => r['status'] == 'submitted' || r['status'] == 'late')
-            .length,
-        total: roster.length,
-      ));
+      out.add(
+        AssignmentProgress(
+          assignment: open[i].$1,
+          course: open[i].$2,
+          submitted: roster
+              .where((r) => r['status'] == 'submitted' || r['status'] == 'late')
+              .length,
+          total: roster.length,
+        ),
+      );
     }
     return out;
   }
@@ -168,10 +174,12 @@ class HomeData {
     final start = DateTime(now.year, now.month, now.day);
     final end = start.add(Duration(days: days));
     return events
-        .where((e) =>
-            (e.kind == 'assignment' || e.kind == 'quiz') &&
-            !e.startsAt.isBefore(start) &&
-            e.startsAt.isBefore(end))
+        .where(
+          (e) =>
+              (e.kind == 'assignment' || e.kind == 'quiz') &&
+              !e.startsAt.isBefore(start) &&
+              e.startsAt.isBefore(end),
+        )
         .toList();
   }
 
@@ -181,12 +189,15 @@ class HomeData {
     return [
       for (var i = days - 1; i >= 0; i--)
         () {
-          final day = DateTime(now.year, now.month, now.day)
-              .subtract(Duration(days: i));
+          final day = DateTime(
+            now.year,
+            now.month,
+            now.day,
+          ).subtract(Duration(days: i));
           final key = isoDate(day);
           return (
             day,
-            AttendanceSummary.of(attendance.where((r) => r.date == key))
+            AttendanceSummary.of(attendance.where((r) => r.date == key)),
           );
         }(),
     ];
@@ -197,10 +208,12 @@ class HomeData {
 List<Course> myCourses(User user, List<Course> all) {
   if (user.isAdmin) return all;
   final mine = all
-      .where((c) =>
-          user.courseIds.contains(c.id) ||
-          c.teacherId == user.id ||
-          c.studentIds.contains(user.id))
+      .where(
+        (c) =>
+            user.courseIds.contains(c.id) ||
+            c.teacherId == user.id ||
+            c.studentIds.contains(user.id),
+      )
       .toList();
   return mine;
 }

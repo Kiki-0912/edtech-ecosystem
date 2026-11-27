@@ -122,8 +122,11 @@ class OfflineClient extends http.BaseClient {
   static Map<String, dynamic>? _userFromToken(String? token) {
     if (token == null || !token.startsWith(_tokenPrefix)) return null;
     try {
-      final json = utf8.decode(base64Url
-          .decode(base64Url.normalize(token.substring(_tokenPrefix.length))));
+      final json = utf8.decode(
+        base64Url.decode(
+          base64Url.normalize(token.substring(_tokenPrefix.length)),
+        ),
+      );
       final user = jsonDecode(json);
       return user is Map<String, dynamic> && user['id'] is String ? user : null;
     } catch (_) {
@@ -149,8 +152,13 @@ class OfflineClient extends http.BaseClient {
     final token = _bearer(request.headers);
 
     try {
-      final result =
-          await _route(method, path, uri.queryParameters, body, token);
+      final result = await _route(
+        method,
+        path,
+        uri.queryParameters,
+        body,
+        token,
+      );
       return _json(result.status, result.body);
     } catch (error) {
       return _json(500, _error('INTERNAL_ERROR', error.toString()));
@@ -193,8 +201,10 @@ class OfflineClient extends http.BaseClient {
   }
 
   /// Staff plus the stored students, keyed by id.
-  Future<List<Map<String, dynamic>>> _users() async =>
-      [..._staff, ...await _store.getStudents()];
+  Future<List<Map<String, dynamic>>> _users() async => [
+        ..._staff,
+        ...await _store.getStudents(),
+      ];
 
   Future<Map<String, dynamic>?> _userById(String id) async =>
       (await _users()).where((u) => u['id'] == id).firstOrNull;
@@ -313,7 +323,7 @@ class OfflineClient extends http.BaseClient {
         return _channelsRoute(rest, method, body, caller);
       case 'telemetry':
         return _Result(200, {
-          'data': {'status': 'ok'}
+          'data': {'status': 'ok'},
         });
       case 'integrity':
         return _integrityRoute(rest, method);
@@ -358,10 +368,11 @@ class OfflineClient extends http.BaseClient {
       final requested = body['role']?.toString();
       if (requested != null && requested != 'student') {
         return _fail(
-            400,
-            'INVALID_BODY',
-            'Public sign-up creates student accounts; '
-                'teachers are added by an admin');
+          400,
+          'INVALID_BODY',
+          'Public sign-up creates student accounts; '
+              'teachers are added by an admin',
+        );
       }
       return _signedIn({
         'id': 'u-student-1',
@@ -381,21 +392,26 @@ class OfflineClient extends http.BaseClient {
     final phone = body['phone']?.toString().trim() ?? '';
     final email = body['email']?.toString().trim().toLowerCase() ?? '';
     final match = (await _users())
-        .where((u) =>
-            (phone.isNotEmpty && u['phone'] == phone) ||
-            (email.isNotEmpty && u['email']?.toString().toLowerCase() == email))
+        .where(
+          (u) =>
+              (phone.isNotEmpty && u['phone'] == phone) ||
+              (email.isNotEmpty &&
+                  u['email']?.toString().toLowerCase() == email),
+        )
         .firstOrNull;
     if (action == 'send-sms') {
       return _Result(200, {
         'data': {'sent': true},
       });
     }
-    return _signedIn(match ??
-        {
-          ..._staff.firstWhere((u) => u['id'] == 'u-admin-1'),
-          if (phone.isNotEmpty) 'phone': phone,
-          if (email.isNotEmpty) 'email': email,
-        });
+    return _signedIn(
+      match ??
+          {
+            ..._staff.firstWhere((u) => u['id'] == 'u-admin-1'),
+            if (phone.isNotEmpty) 'phone': phone,
+            if (email.isNotEmpty) 'email': email,
+          },
+    );
   }
 
   Future<_Result> _signedIn(Map<String, dynamic> account) async {
@@ -445,7 +461,8 @@ class OfflineClient extends http.BaseClient {
               'studentCount': (await _enrolledIds(c['id'] as String)).length,
               'openAssignmentCount': _assignments
                   .where(
-                      (a) => a['courseId'] == c['id'] && a['status'] == 'open')
+                    (a) => a['courseId'] == c['id'] && a['status'] == 'open',
+                  )
                   .length,
             },
         ],
@@ -472,7 +489,8 @@ class OfflineClient extends http.BaseClient {
     if (rest.length == 3 && rest[2] == 'assignments') {
       final rows = _assignments.where((a) => a['courseId'] == courseId).toList()
         ..sort(
-            (a, b) => a['dueAt'].toString().compareTo(b['dueAt'].toString()));
+          (a, b) => a['dueAt'].toString().compareTo(b['dueAt'].toString()),
+        );
       return _Result(200, {'data': rows});
     }
     if (rest.length == 3 && rest[2] == 'channels') {
@@ -511,8 +529,11 @@ class OfflineClient extends http.BaseClient {
         return _fail(404, 'COURSE_NOT_FOUND', 'Course not found');
       }
       if (!_manages(caller, course['id'] as String)) {
-        return _fail(403, 'FORBIDDEN',
-            "Only the course's teacher or an admin can view the roster");
+        return _fail(
+          403,
+          'FORBIDDEN',
+          "Only the course's teacher or an admin can view the roster",
+        );
       }
       // Every enrolled student, with their submission if any.
       final students = await _store.getStudents();
@@ -571,7 +592,10 @@ class OfflineClient extends http.BaseClient {
     if (course == null ||
         !(await _enrolledIds(course['id'] as String)).contains(studentId)) {
       return _fail(
-          403, 'NOT_ENROLLED', 'Student is not enrolled in this course');
+        403,
+        'NOT_ENROLLED',
+        'Student is not enrolled in this course',
+      );
     }
     final rawAttachments = body['attachments'] ?? const [];
     if (rawAttachments is! List) {
@@ -579,22 +603,28 @@ class OfflineClient extends http.BaseClient {
     }
     if (assignment['status'] == 'draft') {
       return _fail(
-          409, 'ASSIGNMENT_DRAFT', 'Assignment is not open for submissions');
+        409,
+        'ASSIGNMENT_DRAFT',
+        'Assignment is not open for submissions',
+      );
     }
     final attachments = rawAttachments
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
-        .map((item) => <String, dynamic>{
-              'id':
-                  item['id'] ?? 'att-${DateTime.now().microsecondsSinceEpoch}',
-              'fileName': item['fileName'] ?? 'submission.txt',
-              'mimeType': item['mimeType'] ?? 'text/plain',
-              'sizeBytes': item['sizeBytes'] ?? 0,
-              'url': item['url'] ?? 'offline://submission',
-            })
+        .map(
+          (item) => <String, dynamic>{
+            'id': item['id'] ?? 'att-${DateTime.now().microsecondsSinceEpoch}',
+            'fileName': item['fileName'] ?? 'submission.txt',
+            'mimeType': item['mimeType'] ?? 'text/plain',
+            'sizeBytes': item['sizeBytes'] ?? 0,
+            'url': item['url'] ?? 'offline://submission',
+          },
+        )
         .toList();
-    final resubmitting = (await _store.getSubmissions()).any((s) =>
-        s['assignmentId'] == assignment['id'] && s['studentId'] == studentId);
+    final resubmitting = (await _store.getSubmissions()).any(
+      (s) =>
+          s['assignmentId'] == assignment['id'] && s['studentId'] == studentId,
+    );
     final dueAt = DateTime.tryParse(assignment['dueAt']?.toString() ?? '');
     final submission = await _store.createSubmission(
       assignmentId: assignment['id'] as String,
@@ -652,7 +682,10 @@ class OfflineClient extends http.BaseClient {
     if (rest.length == 2 && method == 'GET') {
       if (caller.role == 'student' && caller.id != rest[1]) {
         return _fail(
-            403, 'FORBIDDEN', 'Students can only view their own record');
+          403,
+          'FORBIDDEN',
+          'Students can only view their own record',
+        );
       }
       final student = await _student(rest[1]);
       return student == null
@@ -726,8 +759,9 @@ class OfflineClient extends http.BaseClient {
     _Caller caller,
   ) async {
     if (method == 'GET') {
-      return _Result(
-          200, {'data': await _store.getStudentDepartments(studentId)});
+      return _Result(200, {
+        'data': await _store.getStudentDepartments(studentId),
+      });
     }
     if (method != 'POST') return _methodNotAllowed();
     if (!caller.isAdmin) return _adminOnly();
@@ -900,8 +934,11 @@ class OfflineClient extends http.BaseClient {
         studentId == null ||
         date == null ||
         !_attendanceStatuses.contains(status)) {
-      return _fail(400, 'INVALID_BODY',
-          'courseId, studentId, date and a valid status are required');
+      return _fail(
+        400,
+        'INVALID_BODY',
+        'courseId, studentId, date and a valid status are required',
+      );
     }
     if (!_manages(caller, courseId)) {
       return _fail(403, 'FORBIDDEN', _noCourseAccess);
@@ -928,11 +965,16 @@ class OfflineClient extends http.BaseClient {
         date == null ||
         records == null ||
         records.length != (raw as List).length ||
-        records.any((r) =>
-            _optional(r['studentId']) == null ||
-            !_attendanceStatuses.contains(r['status']))) {
-      return _fail(400, 'INVALID_BODY',
-          'courseId, date and records with studentId and status are required');
+        records.any(
+          (r) =>
+              _optional(r['studentId']) == null ||
+              !_attendanceStatuses.contains(r['status']),
+        )) {
+      return _fail(
+        400,
+        'INVALID_BODY',
+        'courseId, date and records with studentId and status are required',
+      );
     }
     if (!_manages(caller, courseId)) {
       return _fail(403, 'FORBIDDEN', _noCourseAccess);
@@ -945,7 +987,10 @@ class OfflineClient extends http.BaseClient {
         records.where((r) => !known.contains(r['studentId'])).firstOrNull;
     if (unknown != null) {
       return _fail(
-          400, 'INVALID_REFERENCE', 'Unknown student: ${unknown['studentId']}');
+        400,
+        'INVALID_REFERENCE',
+        'Unknown student: ${unknown['studentId']}',
+      );
     }
     return _Result(201, {
       'data': await _store.bulkMarkAttendance(
@@ -988,8 +1033,11 @@ class OfflineClient extends http.BaseClient {
           bookName == null ||
           courseCode == null ||
           title == null) {
-        return _fail(400, 'INVALID_BODY',
-            'courseId, bookName, courseCode and title are required');
+        return _fail(
+          400,
+          'INVALID_BODY',
+          'courseId, bookName, courseCode and title are required',
+        );
       }
       if (_course(courseId) == null) {
         return _fail(400, 'INVALID_REFERENCE', 'Course not found');
@@ -1118,7 +1166,10 @@ class OfflineClient extends http.BaseClient {
       final startsAt = body['startsAt']?.toString();
       if (title == null || kind == null || startsAt == null) {
         return _fail(
-            400, 'INVALID_BODY', 'title, kind and startsAt are required');
+          400,
+          'INVALID_BODY',
+          'title, kind and startsAt are required',
+        );
       }
       final invalid = _invalidEvent(body);
       if (invalid != null) return _fail(400, 'INVALID_BODY', invalid);
@@ -1126,7 +1177,10 @@ class OfflineClient extends http.BaseClient {
       // Course-less (institution-wide) events are admin-only, like the API.
       if (!_manages(caller, courseId)) {
         return _fail(
-            403, 'FORBIDDEN', 'You can only add events to courses you teach');
+          403,
+          'FORBIDDEN',
+          'You can only add events to courses you teach',
+        );
       }
       final event = await _store.createCalendarEvent(
         title: title,
@@ -1154,7 +1208,10 @@ class OfflineClient extends http.BaseClient {
           (body.containsKey('courseId') &&
               !_manages(caller, _optional(body['courseId'])))) {
         return _fail(
-            403, 'FORBIDDEN', 'You can only edit events of courses you teach');
+          403,
+          'FORBIDDEN',
+          'You can only edit events of courses you teach',
+        );
       }
       // Absent keys keep their value; an explicit null clears it.
       final event = await _store.updateCalendarEvent(
@@ -1178,8 +1235,11 @@ class OfflineClient extends http.BaseClient {
         return _fail(404, 'EVENT_NOT_FOUND', 'Calendar event not found');
       }
       if (!_manages(caller, existing['courseId']?.toString())) {
-        return _fail(403, 'FORBIDDEN',
-            'You can only delete events of courses you teach');
+        return _fail(
+          403,
+          'FORBIDDEN',
+          'You can only delete events of courses you teach',
+        );
       }
       await _store.deleteCalendarEvent(id);
       return _success();
@@ -1199,8 +1259,9 @@ class OfflineClient extends http.BaseClient {
       );
       return _Result(200, {
         'data': events
-            .where((e) =>
-                e['courseId'] == null || courseIds.contains(e['courseId']))
+            .where(
+              (e) => e['courseId'] == null || courseIds.contains(e['courseId']),
+            )
             .toList(),
       });
     }
@@ -1212,7 +1273,8 @@ class OfflineClient extends http.BaseClient {
         return _fail(404, 'USER_NOT_FOUND', 'User not found');
       }
       courseIds = await _readableCourseIds(
-          _Caller(id: userId, role: user['role']?.toString() ?? 'student'));
+        _Caller(id: userId, role: user['role']?.toString() ?? 'student'),
+      );
     }
     return _Result(200, {
       'data': await _store.getCalendarEvents(
@@ -1249,7 +1311,8 @@ class OfflineClient extends http.BaseClient {
   /// messages belong to; other courses get suffixed ids so messages don't
   /// leak between courses. Members: the teacher plus enrolled students.
   Future<List<Map<String, dynamic>>> _channelsFor(
-      Map<String, dynamic> course) async {
+    Map<String, dynamic> course,
+  ) async {
     final courseId = course['id'] as String;
     final suffix = courseId == 'c-cs301' ? '' : '-$courseId';
     final members = <String>[
@@ -1308,8 +1371,11 @@ class OfflineClient extends http.BaseClient {
     if (text.isEmpty) return _fail(400, 'INVALID_BODY', 'body is required');
     if (!isMember) return _notAMember();
     if (channel['kind'] == 'announcement' && caller.role == 'student') {
-      return _fail(403, 'ANNOUNCEMENT_RESTRICTED',
-          'Students cannot post in announcement channels');
+      return _fail(
+        403,
+        'ANNOUNCEMENT_RESTRICTED',
+        'Students cannot post in announcement channels',
+      );
     }
     final message = await _store.postMessage(
       channelId: rest[1],
@@ -1347,7 +1413,7 @@ class OfflineClient extends http.BaseClient {
       _fail(405, 'METHOD_NOT_ALLOWED', 'Method not allowed');
 
   static _Result _success() => _Result(200, {
-        'data': {'success': true}
+        'data': {'success': true},
       });
 
   http.StreamedResponse _json(int status, Object? payload) {

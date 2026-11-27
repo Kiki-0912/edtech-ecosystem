@@ -59,8 +59,11 @@ class _ExportDialogState extends State<_ExportDialog> {
     await Clipboard.setData(ClipboardData(text: _csv ?? ''));
     if (!mounted) return;
     Navigator.of(context).pop();
-    showToast(context, 'Copied $_rows rows — paste into Excel or Sheets',
-        kind: ToastKind.success);
+    showToast(
+      context,
+      'Copied $_rows rows — paste into Excel or Sheets',
+      kind: ToastKind.success,
+    );
   }
 
   @override
@@ -75,7 +78,8 @@ class _ExportDialogState extends State<_ExportDialog> {
             : _csv == null
                 ? const SizedBox(
                     height: 120,
-                    child: Center(child: CircularProgressIndicator()))
+                    child: Center(child: CircularProgressIndicator()),
+                  )
                 : Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -95,7 +99,9 @@ class _ExportDialogState extends State<_ExportDialog> {
                             _csv!,
                             key: const Key('export-preview'),
                             style: context.text.bodySmall?.copyWith(
-                                fontFamily: 'monospace', color: c.textPrimary),
+                              fontFamily: 'monospace',
+                              color: c.textPrimary,
+                            ),
                           ),
                         ),
                       ),

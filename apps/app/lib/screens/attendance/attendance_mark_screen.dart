@@ -109,7 +109,7 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
   void _markAll(String status) {
     setState(() {
       _roster = [
-        for (final r in _roster) {...r, 'status': status}
+        for (final r in _roster) {...r, 'status': status},
       ];
       _dirty = true;
     });
@@ -155,8 +155,11 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
         _dirty = false;
         _savedOnce = true;
       });
-      showToast(context, 'Attendance saved successfully',
-          kind: ToastKind.success);
+      showToast(
+        context,
+        'Attendance saved successfully',
+        kind: ToastKind.success,
+      );
     } catch (e) {
       if (mounted) showToast(context, friendlyError(e), kind: ToastKind.error);
     } finally {
@@ -179,48 +182,52 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
               border: Border(top: BorderSide(color: context.colors.border)),
             ),
             padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
             child: SafeArea(
               top: false,
-              child: LayoutBuilder(builder: (context, constraints) {
-                final badges = Wrap(
-                  spacing: AppSpacing.xs,
-                  runSpacing: AppSpacing.xxs,
-                  children: [
-                    for (final s in _statuses)
-                      StatusBadge(
-                        label:
-                            '${counts[s]} ${s[0].toUpperCase()}${s.substring(1)}',
-                        tone: attendanceTone(s),
-                      ),
-                  ],
-                );
-                final button = BusyButton(
-                  key: const Key('attendance-save'),
-                  label: _dirty || !_savedOnce ? 'Save attendance' : 'Saved',
-                  icon: Icons.check_rounded,
-                  busy: _saving,
-                  onPressed: _saving ? null : _save,
-                );
-                if (constraints.maxWidth < 560) {
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final badges = Wrap(
+                    spacing: AppSpacing.xs,
+                    runSpacing: AppSpacing.xxs,
                     children: [
-                      badges,
-                      const SizedBox(height: AppSpacing.xs),
+                      for (final s in _statuses)
+                        StatusBadge(
+                          label:
+                              '${counts[s]} ${s[0].toUpperCase()}${s.substring(1)}',
+                          tone: attendanceTone(s),
+                        ),
+                    ],
+                  );
+                  final button = BusyButton(
+                    key: const Key('attendance-save'),
+                    label: _dirty || !_savedOnce ? 'Save attendance' : 'Saved',
+                    icon: Icons.check_rounded,
+                    busy: _saving,
+                    onPressed: _saving ? null : _save,
+                  );
+                  if (constraints.maxWidth < 560) {
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        badges,
+                        const SizedBox(height: AppSpacing.xs),
+                        button,
+                      ],
+                    );
+                  }
+                  return Row(
+                    children: [
+                      Expanded(child: badges),
+                      const SizedBox(width: AppSpacing.sm),
                       button,
                     ],
                   );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: badges),
-                    const SizedBox(width: AppSpacing.sm),
-                    button,
-                  ],
-                );
-              }),
+                },
+              ),
             ),
           );
 
@@ -244,9 +251,10 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
           onRetry: _loadCourses,
           isEmpty: _courses.isEmpty,
           empty: const EmptyState(
-              icon: Icons.menu_book_outlined,
-              title: 'No courses to mark',
-              message: 'You need to teach a course to take attendance.'),
+            icon: Icons.menu_book_outlined,
+            title: 'No courses to mark',
+            message: 'You need to teach a course to take attendance.',
+          ),
           builder: (_) => Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -261,9 +269,12 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
                     items: [
                       for (final c in _courses)
                         DropdownMenuItem(
-                            value: c.id,
-                            child: Text('${c.code} · ${c.title}',
-                                overflow: TextOverflow.ellipsis)),
+                          value: c.id,
+                          child: Text(
+                            '${c.code} · ${c.title}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                     ],
                     onChanged: (v) {
                       if (v == null) return;
@@ -301,8 +312,9 @@ class _AttendanceMarkScreenState extends State<AttendanceMarkScreen> {
                 const SkeletonList(count: 4, itemHeight: 64)
               else if (_roster.isEmpty)
                 const EmptyState(
-                    icon: Icons.groups_outlined,
-                    title: 'No students in this course')
+                  icon: Icons.groups_outlined,
+                  title: 'No students in this course',
+                )
               else
                 AppCard(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
@@ -359,7 +371,8 @@ class _RosterRow extends StatelessWidget {
             onSelected: (_) => onStatus(s),
             selectedColor: c.bg(attendanceTone(s)),
             side: BorderSide(
-                color: status == s ? c.fg(attendanceTone(s)) : c.border),
+              color: status == s ? c.fg(attendanceTone(s)) : c.border,
+            ),
             labelStyle: context.text.labelMedium?.copyWith(
               color: status == s ? c.fg(attendanceTone(s)) : c.textSecondary,
               fontWeight: status == s ? FontWeight.w600 : FontWeight.w500,
@@ -387,17 +400,23 @@ class _RosterRow extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(name,
-                  style: context.text.titleSmall,
-                  overflow: TextOverflow.ellipsis),
+              Text(
+                name,
+                style: context.text.titleSmall,
+                overflow: TextOverflow.ellipsis,
+              ),
               if (note.isNotEmpty)
-                Text(note,
-                    style: context.text.bodySmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis)
+                Text(
+                  note,
+                  style: context.text.bodySmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )
               else if (student['rollNumber'] != null)
-                Text(student['rollNumber'].toString(),
-                    style: context.text.bodySmall),
+                Text(
+                  student['rollNumber'].toString(),
+                  style: context.text.bodySmall,
+                ),
             ],
           ),
         ),
@@ -406,13 +425,20 @@ class _RosterRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.xs),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs,
+      ),
       child: LayoutBuilder(
         builder: (context, constraints) => constraints.maxWidth < 640
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(children: [Expanded(child: identity), noteButton]),
+                  Row(
+                    children: [
+                      Expanded(child: identity),
+                      noteButton,
+                    ],
+                  ),
                   chips,
                 ],
               )
@@ -441,8 +467,9 @@ class _NoteDialog extends StatefulWidget {
 }
 
 class _NoteDialogState extends State<_NoteDialog> {
-  late final TextEditingController _controller =
-      TextEditingController(text: widget.initial);
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initial,
+  );
 
   @override
   void dispose() {
@@ -460,12 +487,14 @@ class _NoteDialogState extends State<_NoteDialog> {
         autofocus: true,
         maxLines: 3,
         decoration: const InputDecoration(
-            hintText: 'e.g. Left early for a clinic visit'),
+          hintText: 'e.g. Left early for a clinic visit',
+        ),
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           key: const Key('attendance-note-save'),
           onPressed: () => Navigator.of(context).pop(_controller.text.trim()),

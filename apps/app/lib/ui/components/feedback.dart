@@ -21,7 +21,9 @@ class EmptyState extends StatelessWidget {
     final c = context.colors;
     return Padding(
       padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.xl, horizontal: AppSpacing.md),
+        vertical: AppSpacing.xl,
+        horizontal: AppSpacing.md,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -35,12 +37,18 @@ class EmptyState extends StatelessWidget {
             child: Icon(icon, color: c.textMuted, size: 28),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(title,
-              style: context.text.titleMedium, textAlign: TextAlign.center),
+          Text(
+            title,
+            style: context.text.titleMedium,
+            textAlign: TextAlign.center,
+          ),
           if (message != null) ...[
             const SizedBox(height: AppSpacing.xxs),
-            Text(message!,
-                style: context.text.bodyMedium, textAlign: TextAlign.center),
+            Text(
+              message!,
+              style: context.text.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
           ],
           if (action != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -70,23 +78,33 @@ class ErrorState extends StatelessWidget {
     final c = context.colors;
     return Padding(
       padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.xl, horizontal: AppSpacing.md),
+        vertical: AppSpacing.xl,
+        horizontal: AppSpacing.md,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             width: 56,
             height: 56,
-            decoration:
-                BoxDecoration(color: c.dangerSoft, shape: BoxShape.circle),
+            decoration: BoxDecoration(
+              color: c.dangerSoft,
+              shape: BoxShape.circle,
+            ),
             child: Icon(Icons.error_outline_rounded, color: c.danger, size: 28),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text(title,
-              style: context.text.titleMedium, textAlign: TextAlign.center),
+          Text(
+            title,
+            style: context.text.titleMedium,
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: AppSpacing.xxs),
-          Text(friendlyError(message),
-              style: context.text.bodyMedium, textAlign: TextAlign.center),
+          Text(
+            friendlyError(message),
+            style: context.text.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
           if (onRetry != null) ...[
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
@@ -113,15 +131,19 @@ class FormErrorBanner extends StatelessWidget {
     final c = context.colors;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration:
-          BoxDecoration(color: c.dangerSoft, borderRadius: AppRadius.mdAll),
+      decoration: BoxDecoration(
+        color: c.dangerSoft,
+        borderRadius: AppRadius.mdAll,
+      ),
       child: Row(
         children: [
           Icon(Icons.error_outline_rounded, size: 20, color: c.danger),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: Text(message,
-                style: context.text.bodyMedium?.copyWith(color: c.textPrimary)),
+            child: Text(
+              message,
+              style: context.text.bodyMedium?.copyWith(color: c.textPrimary),
+            ),
           ),
         ],
       ),
@@ -228,7 +250,9 @@ class AsyncBody extends StatelessWidget {
     if (isEmpty) {
       return empty ??
           const EmptyState(
-              icon: Icons.inbox_outlined, title: 'Nothing here yet');
+            icon: Icons.inbox_outlined,
+            title: 'Nothing here yet',
+          );
     }
     return builder(context);
   }
@@ -236,8 +260,11 @@ class AsyncBody extends StatelessWidget {
 
 enum ToastKind { info, success, error }
 
-void showToast(BuildContext context, String message,
-    {ToastKind kind = ToastKind.info}) {
+void showToast(
+  BuildContext context,
+  String message, {
+  ToastKind kind = ToastKind.info,
+}) {
   final messenger = ScaffoldMessenger.maybeOf(context);
   if (messenger == null) return;
   final c = context.colors;
@@ -253,15 +280,17 @@ void showToast(BuildContext context, String message,
   };
   messenger
     ..hideCurrentSnackBar()
-    ..showSnackBar(SnackBar(
-      content: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text(message)),
-        ],
+    ..showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 20),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(child: Text(message)),
+          ],
+        ),
       ),
-    ));
+    );
 }
 
 /// Confirmation dialog. Returns true when the user confirms.
@@ -287,7 +316,9 @@ Future<bool> confirmDialog(
           key: const Key('confirm-dialog-ok'),
           style: destructive
               ? FilledButton.styleFrom(
-                  backgroundColor: c.danger, foregroundColor: c.surface)
+                  backgroundColor: c.danger,
+                  foregroundColor: c.surface,
+                )
               : null,
           onPressed: () => Navigator.of(ctx).pop(true),
           child: Text(confirmLabel),

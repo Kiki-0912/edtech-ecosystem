@@ -76,8 +76,11 @@ class _IntegrityScreenState extends State<IntegrityScreen> {
     });
     try {
       final courses = myCourses(user, await api.getCourses());
-      final perCourse = await Future.wait(courses.map(
-          (c) => api.getAssignments(c.id).catchError((_) => <Assignment>[])));
+      final perCourse = await Future.wait(
+        courses.map(
+          (c) => api.getAssignments(c.id).catchError((_) => <Assignment>[]),
+        ),
+      );
       final list = <(Assignment, Course)>[
         for (var i = 0; i < courses.length; i++)
           for (final a in perCourse[i])
@@ -165,13 +168,19 @@ class _IntegrityScreenState extends State<IntegrityScreen> {
             '${score != null ? ' (effort score $score/100)' : ''}.',
       );
       if (mounted) {
-        showToast(context, 'Request sent to #$channel',
-            kind: ToastKind.success);
+        showToast(
+          context,
+          'Request sent to #$channel',
+          kind: ToastKind.success,
+        );
       }
     } catch (e) {
       if (mounted) {
-        showToast(context, 'Could not send: ${friendlyError(e)}',
-            kind: ToastKind.error);
+        showToast(
+          context,
+          'Could not send: ${friendlyError(e)}',
+          kind: ToastKind.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -226,9 +235,11 @@ class _IntegrityScreenState extends State<IntegrityScreen> {
                       key: const Key('integrity-back-roster'),
                       onPressed: () => _selectStudent(null),
                       icon: const Icon(Icons.arrow_back_rounded, size: 18),
-                      label: Text(studentName == null
-                          ? 'Back to class'
-                          : 'Back to class · $studentName'),
+                      label: Text(
+                        studentName == null
+                            ? 'Back to class'
+                            : 'Back to class · $studentName',
+                      ),
                     ),
                   ),
                 if (_report == null)
@@ -275,8 +286,10 @@ class _AssignmentPicker extends StatelessWidget {
         for (final (a, c) in items)
           DropdownMenuItem(
             value: a.id,
-            child:
-                Text('${c.code} · ${a.title}', overflow: TextOverflow.ellipsis),
+            child: Text(
+              '${c.code} · ${a.title}',
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
       ],
       onChanged: (v) {
@@ -296,7 +309,9 @@ class _RosterView extends StatelessWidget {
   Widget build(BuildContext context) {
     if (roster.isEmpty) {
       return const EmptyState(
-          icon: Icons.groups_outlined, title: 'No students enrolled');
+        icon: Icons.groups_outlined,
+        title: 'No students enrolled',
+      );
     }
     final scored = roster.where((r) => r['effortScore'] is num).toList();
     final avg = scored.isEmpty
@@ -366,8 +381,10 @@ class _ReportView extends StatelessWidget {
             tone: _flagged ? Tone.warning : Tone.success,
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('Updated ${shortDate(report.generatedAt.toLocal())}',
-              style: context.text.bodySmall),
+          Text(
+            'Updated ${shortDate(report.generatedAt.toLocal())}',
+            style: context.text.bodySmall,
+          ),
         ],
       ),
     );
@@ -416,8 +433,10 @@ class _ReportView extends StatelessWidget {
                   ),
               ],
             )
-          : Text('No integrity flags raised on this session.',
-              style: context.text.bodyMedium),
+          : Text(
+              'No integrity flags raised on this session.',
+              style: context.text.bodyMedium,
+            ),
     );
 
     return TwoPane(
@@ -426,7 +445,11 @@ class _ReportView extends StatelessWidget {
       primary: scoreCard,
       secondary: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [metrics, const SizedBox(height: AppSpacing.lg), flags],
+        children: [
+          metrics,
+          const SizedBox(height: AppSpacing.lg),
+          flags,
+        ],
       ),
     );
   }
@@ -513,10 +536,14 @@ class _ReviewRequest extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Think something looks off?',
-                  style: context.text.titleSmall),
-              Text('Ask your teacher to review this report in class chat.',
-                  style: context.text.bodySmall),
+              Text(
+                'Think something looks off?',
+                style: context.text.titleSmall,
+              ),
+              Text(
+                'Ask your teacher to review this report in class chat.',
+                style: context.text.bodySmall,
+              ),
             ],
           ),
         ),
@@ -533,7 +560,11 @@ class _ReviewRequest extends StatelessWidget {
         builder: (context, constraints) => constraints.maxWidth < 560
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [text, const SizedBox(height: AppSpacing.sm), button],
+                children: [
+                  text,
+                  const SizedBox(height: AppSpacing.sm),
+                  button,
+                ],
               )
             : Row(
                 children: [

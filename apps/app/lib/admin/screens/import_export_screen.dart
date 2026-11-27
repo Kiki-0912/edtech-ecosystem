@@ -132,12 +132,16 @@ class _AdminImportExportScreenState extends State<AdminImportExportScreen> {
                     decoration: const InputDecoration(labelText: 'Course'),
                     items: [
                       const DropdownMenuItem<String?>(
-                          value: null, child: Text('All courses')),
+                        value: null,
+                        child: Text('All courses'),
+                      ),
                       for (final c in _courses)
                         DropdownMenuItem<String?>(
                           value: c.id,
-                          child: Text('${c.code} · ${c.title}',
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            '${c.code} · ${c.title}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                     ],
                     onChanged: (v) => setState(() => _courseId = v),
@@ -177,8 +181,10 @@ class _AdminImportExportScreenState extends State<AdminImportExportScreen> {
                           load: () =>
                               api.exportNotesToExcel(courseId: _courseId),
                         ),
-                        icon:
-                            const Icon(Icons.sticky_note_2_outlined, size: 18),
+                        icon: const Icon(
+                          Icons.sticky_note_2_outlined,
+                          size: 18,
+                        ),
                         label: const Text('Notes'),
                       ),
                     ],

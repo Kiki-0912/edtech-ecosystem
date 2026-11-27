@@ -115,20 +115,25 @@ class StatTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(value,
-                    style: context.text.headlineSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
-                Text(label,
-                    style: context.text.labelMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis),
+                Text(
+                  value,
+                  style: context.text.headlineSmall,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  label,
+                  style: context.text.labelMedium,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 if (caption != null)
-                  Text(caption!,
-                      style:
-                          context.text.bodySmall?.copyWith(color: c.fg(tone)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    caption!,
+                    style: context.text.bodySmall?.copyWith(color: c.fg(tone)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
               ],
             ),
           ),
@@ -194,7 +199,9 @@ class StatusBadge extends StatelessWidget {
     final c = context.colors;
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.xs, vertical: AppSpacing.xxs / 2),
+        horizontal: AppSpacing.xs,
+        vertical: AppSpacing.xxs / 2,
+      ),
       decoration: BoxDecoration(
         color: c.bg(tone),
         borderRadius: AppRadius.pillAll,
@@ -207,10 +214,12 @@ class StatusBadge extends StatelessWidget {
             const SizedBox(width: AppSpacing.xxs),
           ],
           Flexible(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: context.text.labelSmall?.copyWith(color: c.fg(tone))),
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: context.text.labelSmall?.copyWith(color: c.fg(tone)),
+            ),
           ),
         ],
       ),
@@ -265,15 +274,19 @@ class ListRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: context.text.titleSmall,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    title,
+                    style: context.text.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   if (subtitle != null && subtitle!.isNotEmpty)
-                    Text(subtitle!,
-                        style: context.text.bodySmall,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      subtitle!,
+                      style: context.text.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                 ],
               ),
             ),
@@ -356,15 +369,21 @@ class ProgressRing extends StatelessWidget {
         curve: Curves.easeOutCubic,
         builder: (context, v, _) => CustomPaint(
           painter: _RingPainter(
-              value: v, color: color, track: c.surfaceMuted, stroke: stroke),
+            value: v,
+            color: color,
+            track: c.surfaceMuted,
+            stroke: stroke,
+          ),
           child: Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(label,
-                    style: size >= 100
-                        ? context.text.headlineMedium
-                        : context.text.titleMedium),
+                Text(
+                  label,
+                  style: size >= 100
+                      ? context.text.headlineMedium
+                      : context.text.titleMedium,
+                ),
                 if (caption != null)
                   Text(caption!, style: context.text.bodySmall),
               ],
@@ -400,7 +419,12 @@ class _RingPainter extends CustomPainter {
     canvas.drawArc(inner, 0, math.pi * 2, false, base..color = track);
     if (value > 0) {
       canvas.drawArc(
-          inner, -math.pi / 2, math.pi * 2 * value, false, base..color = color);
+        inner,
+        -math.pi / 2,
+        math.pi * 2 * value,
+        false,
+        base..color = color,
+      );
     }
   }
 

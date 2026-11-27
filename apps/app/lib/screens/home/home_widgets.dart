@@ -40,7 +40,10 @@ class EventList extends StatelessWidget {
           ListRow(
             key: Key('home-event-${e.id}'),
             leading: IconBadge(
-                icon: eventIcon(e.kind), tone: eventTone(e.kind), size: 36),
+              icon: eventIcon(e.kind),
+              tone: eventTone(e.kind),
+              size: 36,
+            ),
             title: e.title,
             subtitle: showDate
                 ? '${isSameDay(e.startsAt, now) ? 'Today' : shortDate(e.startsAt)} · ${clockTime(e.startsAt)}'
@@ -85,7 +88,10 @@ class CourseList extends StatelessWidget {
           ListRow(
             key: Key('home-course-${c.id}'),
             leading: const IconBadge(
-                icon: Icons.menu_book_outlined, tone: Tone.info, size: 36),
+              icon: Icons.menu_book_outlined,
+              tone: Tone.info,
+              size: 36,
+            ),
             title: c.title,
             subtitle: [
               c.code,
@@ -93,7 +99,9 @@ class CourseList extends StatelessWidget {
             ].join(' · '),
             trailing: (c.openAssignmentCount ?? 0) > 0
                 ? StatusBadge(
-                    label: '${c.openAssignmentCount} open', tone: Tone.warning)
+                    label: '${c.openAssignmentCount} open',
+                    tone: Tone.warning,
+                  )
                 : null,
             onTap: () => context.go('/courses/${c.id}'),
           ),
@@ -138,12 +146,21 @@ class AttendanceBreakdown extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _LegendRow(
-                  color: c.success, label: 'Present', value: summary.present),
+                color: c.success,
+                label: 'Present',
+                value: summary.present,
+              ),
               _LegendRow(color: c.warning, label: 'Late', value: summary.late),
               _LegendRow(
-                  color: c.danger, label: 'Absent', value: summary.absent),
+                color: c.danger,
+                label: 'Absent',
+                value: summary.absent,
+              ),
               _LegendRow(
-                  color: c.info, label: 'Excused', value: summary.excused),
+                color: c.info,
+                label: 'Excused',
+                value: summary.excused,
+              ),
             ],
           ),
         ),
@@ -153,8 +170,11 @@ class AttendanceBreakdown extends StatelessWidget {
 }
 
 class _LegendRow extends StatelessWidget {
-  const _LegendRow(
-      {required this.color, required this.label, required this.value});
+  const _LegendRow({
+    required this.color,
+    required this.label,
+    required this.value,
+  });
 
   final Color color;
   final String label;
@@ -261,29 +281,37 @@ class AssignmentProgressList extends StatelessWidget {
           InkWell(
             key: Key('home-progress-${p.assignment.id}'),
             borderRadius: AppRadius.mdAll,
-            onTap: () => context
-                .go('/courses/${p.course.id}/assignments/${p.assignment.id}'),
+            onTap: () => context.go(
+              '/courses/${p.course.id}/assignments/${p.assignment.id}',
+            ),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                  vertical: AppSpacing.sm, horizontal: AppSpacing.xs),
+                vertical: AppSpacing.sm,
+                horizontal: AppSpacing.xs,
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
                       Expanded(
-                        child: Text(p.assignment.title,
-                            style: context.text.titleSmall,
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          p.assignment.title,
+                          style: context.text.titleSmall,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      Text('${p.submitted}/${p.total} submitted',
-                          style: context.text.labelMedium),
+                      Text(
+                        '${p.submitted}/${p.total} submitted',
+                        style: context.text.labelMedium,
+                      ),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.xxs),
                   Text(
-                      '${p.course.code} · due ${shortDate(p.assignment.dueAt)}',
-                      style: context.text.bodySmall),
+                    '${p.course.code} · due ${shortDate(p.assignment.dueAt)}',
+                    style: context.text.bodySmall,
+                  ),
                   const SizedBox(height: AppSpacing.xs),
                   ProgressBar(
                     value: p.ratio,

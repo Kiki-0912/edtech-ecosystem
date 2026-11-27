@@ -183,8 +183,9 @@ class _StudentHome extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SectionCard(
-                  title: 'My courses',
-                  child: CourseList(courses: data.courses)),
+                title: 'My courses',
+                child: CourseList(courses: data.courses),
+              ),
               const SizedBox(height: AppSpacing.lg),
               SectionCard(
                 title: 'My attendance',
@@ -206,8 +207,10 @@ class _TeacherHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = data.eventsOn(DateTime.now());
-    final pending =
-        data.progress.fold<int>(0, (sum, p) => sum + (p.total - p.submitted));
+    final pending = data.progress.fold<int>(
+      0,
+      (sum, p) => sum + (p.total - p.submitted),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -241,11 +244,13 @@ class _TeacherHome extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        const QuickActions(actions: [
-          (Icons.fact_check_outlined, 'Mark attendance', '/attendance/mark'),
-          (Icons.campaign_outlined, 'Message a class', '/chat'),
-          (Icons.sticky_note_2_outlined, 'Add a note', '/notes'),
-        ]),
+        const QuickActions(
+          actions: [
+            (Icons.fact_check_outlined, 'Mark attendance', '/attendance/mark'),
+            (Icons.campaign_outlined, 'Message a class', '/chat'),
+            (Icons.sticky_note_2_outlined, 'Add a note', '/notes'),
+          ],
+        ),
         const SizedBox(height: AppSpacing.lg),
         TwoPane(
           primary: Column(
@@ -254,10 +259,7 @@ class _TeacherHome extends StatelessWidget {
               SectionCard(
                 title: 'Today',
                 subtitle: '${today.length} scheduled',
-                child: EventList(
-                  events: today,
-                  emptyTitle: 'No classes today',
-                ),
+                child: EventList(events: today, emptyTitle: 'No classes today'),
               ),
               const SizedBox(height: AppSpacing.lg),
               SectionCard(
@@ -270,8 +272,9 @@ class _TeacherHome extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SectionCard(
-                  title: 'My courses',
-                  child: CourseList(courses: data.courses)),
+                title: 'My courses',
+                child: CourseList(courses: data.courses),
+              ),
               const SizedBox(height: AppSpacing.lg),
               SectionCard(
                 title: 'Class attendance',
@@ -332,11 +335,13 @@ class _AdminHome extends StatelessWidget {
           ],
         ),
         const SizedBox(height: AppSpacing.md),
-        const QuickActions(actions: [
-          (Icons.person_add_alt_outlined, 'Add student', '/students'),
-          (Icons.event_outlined, 'Add event', '/calendar'),
-          (Icons.fact_check_outlined, 'Mark attendance', '/attendance/mark'),
-        ]),
+        const QuickActions(
+          actions: [
+            (Icons.person_add_alt_outlined, 'Add student', '/students'),
+            (Icons.event_outlined, 'Add event', '/calendar'),
+            (Icons.fact_check_outlined, 'Mark attendance', '/attendance/mark'),
+          ],
+        ),
         const SizedBox(height: AppSpacing.lg),
         TwoPane(
           primary: Column(

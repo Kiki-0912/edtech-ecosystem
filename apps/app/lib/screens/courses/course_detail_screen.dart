@@ -113,19 +113,22 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           minItemWidth: 160,
           children: [
             StatTile(
-                label: 'Students',
-                value: '${course.studentCount}',
-                icon: Icons.groups_outlined),
+              label: 'Students',
+              value: '${course.studentCount}',
+              icon: Icons.groups_outlined,
+            ),
             StatTile(
-                label: 'Open assignments',
-                value: '${open.length}',
-                icon: Icons.assignment_outlined,
-                tone: open.isEmpty ? Tone.success : Tone.warning),
+              label: 'Open assignments',
+              value: '${open.length}',
+              icon: Icons.assignment_outlined,
+              tone: open.isEmpty ? Tone.success : Tone.warning,
+            ),
             StatTile(
-                label: 'Next due',
-                value: open.isEmpty ? '—' : dayMonth(open.first.dueAt),
-                icon: Icons.event_outlined,
-                tone: Tone.info),
+              label: 'Next due',
+              value: open.isEmpty ? '—' : dayMonth(open.first.dueAt),
+              icon: Icons.event_outlined,
+              tone: Tone.info,
+            ),
           ],
         ),
         TwoPane(
@@ -135,7 +138,8 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             child: _assignments.isEmpty
                 ? const EmptyState(
                     icon: Icons.assignment_outlined,
-                    title: 'No assignments yet')
+                    title: 'No assignments yet',
+                  )
                 : Column(
                     children: [
                       for (final a in [...open, ...closed])
@@ -148,15 +152,18 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
             subtitle: '${_people.length} enrolled',
             child: _people.isEmpty
                 ? const EmptyState(
-                    icon: Icons.groups_outlined, title: 'No students enrolled')
+                    icon: Icons.groups_outlined,
+                    title: 'No students enrolled',
+                  )
                 : Column(
                     children: [
                       for (final p in _people)
                         ListRow(
                           dense: true,
                           leading: Avatar(
-                              name: p['displayName']?.toString() ?? '?',
-                              size: 32),
+                            name: p['displayName']?.toString() ?? '?',
+                            size: 32,
+                          ),
                           title: p['displayName']?.toString() ?? 'Student',
                           subtitle: p['rollNumber']?.toString() ??
                               p['email']?.toString(),
@@ -186,8 +193,11 @@ class _BackLink extends StatelessWidget {
 }
 
 class AssignmentRow extends StatelessWidget {
-  const AssignmentRow(
-      {super.key, required this.courseId, required this.assignment});
+  const AssignmentRow({
+    super.key,
+    required this.courseId,
+    required this.assignment,
+  });
 
   final String courseId;
   final Assignment assignment;

@@ -63,7 +63,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             children: [
               if (message != null) ...[
                 FormErrorBanner(
-                    key: const Key('admin-login-error'), message: message),
+                  key: const Key('admin-login-error'),
+                  message: message,
+                ),
                 const SizedBox(height: AppSpacing.md),
               ],
               TextFormField(
