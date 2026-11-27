@@ -1,6 +1,9 @@
 import 'package:edtech_app/auth/auth_provider.dart';
+import 'package:edtech_app/auth/data_mode_switch.dart';
 import 'package:edtech_app/config.dart';
 import 'package:edtech_app/formats.dart';
+import 'package:edtech_app/services/api_service.dart';
+import 'package:edtech_app/services/data_mode.dart';
 import 'package:edtech_app/shell/app_shell.dart';
 import 'package:edtech_app/theme_controller.dart';
 import 'package:edtech_app/ui/ui.dart';
@@ -93,20 +96,28 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
         ),
-        const SectionCard(
+        if (DataModeController.available)
+          const SectionCard(
+            title: 'Data source',
+            child: DataModeSwitch(
+              switchKey: Key('profile-mode-toggle'),
+              confirm: true,
+            ),
+          ),
+        SectionCard(
           title: 'About',
           child: Column(
             children: [
               _InfoRow(
-                icon: AppConfig.offlineMode
+                icon: ApiService.instance.isOffline
                     ? Icons.cloud_off_outlined
                     : Icons.cloud_done_outlined,
                 label: 'Data source',
-                value: AppConfig.offlineMode
+                value: ApiService.instance.isOffline
                     ? 'Offline (on this device)'
                     : AppConfig.apiBaseUrl,
               ),
-              _InfoRow(
+              const _InfoRow(
                   icon: Icons.info_outline_rounded,
                   label: 'Version',
                   value: kAppVersion),

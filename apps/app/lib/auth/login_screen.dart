@@ -1,7 +1,9 @@
 import 'package:edtech_app/auth/auth_layout.dart';
 import 'package:edtech_app/auth/auth_provider.dart';
+import 'package:edtech_app/auth/data_mode_switch.dart';
 import 'package:edtech_app/config.dart';
 import 'package:edtech_app/services/api_service.dart';
+import 'package:edtech_app/services/data_mode.dart';
 import 'package:edtech_app/ui/ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
@@ -26,7 +28,19 @@ class _LoginScreenState extends State<LoginScreen> {
   final _password = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    // The SMS entry point depends on the mode the switch below changes.
+    DataModeController.instance.addListener(_onModeChanged);
+  }
+
+  void _onModeChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    DataModeController.instance.removeListener(_onModeChanged);
     _phone.dispose();
     _password.dispose();
     super.dispose();
@@ -114,6 +128,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: _submit,
                 ),
               ),
+              if (DataModeController.available) ...[
+                const SizedBox(height: AppSpacing.md),
+                const DataModeSwitch(switchKey: Key('login-mode-toggle')),
+              ],
             ],
           ),
         ),
