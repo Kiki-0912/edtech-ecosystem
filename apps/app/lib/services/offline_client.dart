@@ -79,41 +79,9 @@ class OfflineClient extends http.BaseClient {
   /// Mirrors the API seed, which only names u-teacher-1.
   static const Map<String, String> _teacherNames = {'u-teacher-1': 'Tayyab'};
 
-  static List<Map<String, dynamic>> get _assignments => [
-        {
-          'id': 'a1',
-          'courseId': 'c-cs301',
-          'title': 'Heuristic Evaluation',
-          'brief': 'Evaluate a web UI against Nielsen heuristics.',
-          'dueAt':
-              DateTime.now().add(const Duration(days: 3)).toIso8601String(),
-          'status': 'open',
-          'createdAt': '2026-09-01T00:00:00.000Z',
-        },
-        {
-          'id': 'a2',
-          'courseId': 'c-cs301',
-          'title': 'Usability Study Report',
-          'brief': 'Write up findings from a usability test.',
-          'dueAt':
-              DateTime.now().add(const Duration(days: 10)).toIso8601String(),
-          'status': 'open',
-          'createdAt': '2026-09-05T00:00:00.000Z',
-        },
-        {
-          'id': 'a3',
-          'courseId': 'c-cs210',
-          'title': 'Binary Search Trees',
-          'brief': 'Implement BST insert, delete, traverse.',
-          'dueAt':
-              DateTime.now().add(const Duration(days: 5)).toIso8601String(),
-          'status': 'open',
-          'createdAt': '2026-09-03T00:00:00.000Z',
-        },
-      ];
-
   static const _eventKinds = {'assignment', 'quiz', 'class', 'institution'};
   static const _attendanceStatuses = {'present', 'absent', 'late', 'excused'};
+  static const _assignmentStatuses = {'draft', 'open', 'closed'};
 
   /// The bearer token for [user] (its id, role and profile, base64url JSON).
   static String tokenFor(Map<String, dynamic> user) =>
@@ -226,8 +194,19 @@ class OfflineClient extends http.BaseClient {
   Map<String, dynamic>? _course(String? id) =>
       _courses.where((c) => c['id'] == id).firstOrNull;
 
-  Map<String, dynamic>? _assignment(String id) =>
-      _assignments.where((a) => a['id'] == id).firstOrNull;
+  /// Drafts are visible only to the course's managers, like the API.
+  bool _canSee(_Caller caller, Map<String, dynamic> assignment) =>
+      assignment['status'] != 'draft' ||
+      _manages(caller, assignment['courseId']?.toString());
+
+  /// A course's assignments as [caller] may list them (drafts hidden from
+  /// anyone who does not manage the course).
+  Future<List<Map<String, dynamic>>> _courseAssignments(
+          String courseId, _Caller caller) async =>
+      [
+        for (final a in await _store.getAssignments(courseId: courseId))
+          if (_canSee(caller, a)) a,
+      ];
 
   /// Enrolled student ids: the stored students' `courseIds` are the truth
   /// (creating, moving and importing students all update them).
@@ -294,7 +273,7 @@ class OfflineClient extends http.BaseClient {
       case 'college':
         return _college();
       case 'courses':
-        return _coursesRoute(rest, method, caller);
+        return _coursesRoute(rest, method, body, caller);
       case 'assignments':
         return _assignmentsRoute(rest, method, body, caller);
       case 'students':
@@ -431,8 +410,12 @@ class OfflineClient extends http.BaseClient {
   Future<_Result> _coursesRoute(
     List<String> rest,
     String method,
+    Map<String, dynamic> body,
     _Caller caller,
   ) async {
+    if (rest.length == 3 && rest[2] == 'assignments' && method == 'POST') {
+      return _createAssignment(rest[1], body, caller);
+    }
     if (method != 'GET') return _methodNotAllowed();
     if (rest.length == 1) {
       // Same enrichment as the API's GET /courses.
@@ -443,10 +426,10 @@ class OfflineClient extends http.BaseClient {
               ...await _courseJson(c),
               'teacherName': _teacherNames[c['teacherId']] ?? 'Unassigned',
               'studentCount': (await _enrolledIds(c['id'] as String)).length,
-              'openAssignmentCount': _assignments
-                  .where(
-                      (a) => a['courseId'] == c['id'] && a['status'] == 'open')
-                  .length,
+              'openAssignmentCount':
+                  (await _store.getAssignments(courseId: c['id'] as String))
+                      .where((a) => a['status'] == 'open')
+                      .length,
             },
         ],
       });
@@ -464,16 +447,13 @@ class OfflineClient extends http.BaseClient {
           'course': await _courseJson(course),
           'teacher': await _userById(course['teacherId'] as String),
           'roster': students,
-          'assignments':
-              _assignments.where((a) => a['courseId'] == courseId).toList(),
+          'assignments': await _courseAssignments(courseId, caller),
         },
       });
     }
     if (rest.length == 3 && rest[2] == 'assignments') {
-      final rows = _assignments.where((a) => a['courseId'] == courseId).toList()
-        ..sort(
-            (a, b) => a['dueAt'].toString().compareTo(b['dueAt'].toString()));
-      return _Result(200, {'data': rows});
+      // Already sorted by due date.
+      return _Result(200, {'data': await _courseAssignments(courseId, caller)});
     }
     if (rest.length == 3 && rest[2] == 'channels') {
       return _Result(200, {'data': await _channelsFor(course)});
@@ -491,11 +471,46 @@ class OfflineClient extends http.BaseClient {
     _Caller caller,
   ) async {
     if (rest.length < 2) return _notFound('Unknown assignment route');
-    final assignment = _assignment(rest[1]);
+    final changing =
+        rest.length == 2 && (method == 'PATCH' || method == 'DELETE');
+    // Like the API, the role check comes before the lookup.
+    if (changing && !caller.isStaff) {
+      return _fail(
+          403, 'FORBIDDEN', 'Only teachers and admins can change assignments');
+    }
+    final assignment = await _store.getAssignment(rest[1]);
     if (assignment == null) {
       return _fail(404, 'ASSIGNMENT_NOT_FOUND', 'Assignment not found');
     }
     final course = _course(assignment['courseId'] as String);
+
+    if (changing) {
+      if (!_manages(caller, assignment['courseId']?.toString())) {
+        return _fail(403, 'FORBIDDEN',
+            'You can only change assignments of courses you teach');
+      }
+      if (method == 'DELETE') {
+        await _store.deleteAssignment(assignment['id'] as String);
+        return _success();
+      }
+      final invalid = _invalidAssignment(body, creating: false);
+      if (invalid != null) return _fail(400, 'INVALID_BODY', invalid);
+      final updated = await _store.updateAssignment(
+        assignment['id'] as String,
+        title:
+            body.containsKey('title') ? (body['title'] as String).trim() : null,
+        brief: body['brief'] as String?,
+        dueAt: body.containsKey('dueAt')
+            ? DateTime.parse(body['dueAt'] as String)
+            : null,
+        status: body['status'] as String?,
+      );
+      return _Result(200, {'data': updated});
+    }
+    if (rest.length == 2 && method == 'GET' && !_canSee(caller, assignment)) {
+      // A student (or another course's teacher) cannot see a draft.
+      return _fail(404, 'ASSIGNMENT_NOT_FOUND', 'Assignment not found');
+    }
 
     if (rest.length == 2 && method == 'GET') {
       // The API wraps the assignment with its course.
@@ -545,6 +560,71 @@ class OfflineClient extends http.BaseClient {
     return _notFound('Unknown assignment route');
   }
 
+  /// POST /courses/:courseId/assignments: admin or the course's teacher.
+  Future<_Result> _createAssignment(
+    String courseId,
+    Map<String, dynamic> body,
+    _Caller caller,
+  ) async {
+    // Same order as the API: role, then course, then ownership.
+    if (!caller.isStaff) {
+      return _fail(
+          403, 'FORBIDDEN', 'Only teachers and admins can create assignments');
+    }
+    if (_course(courseId) == null) {
+      return _fail(404, 'COURSE_NOT_FOUND', 'Course not found');
+    }
+    if (!_manages(caller, courseId)) {
+      return _fail(403, 'FORBIDDEN',
+          'You can only add assignments to courses you teach');
+    }
+    final invalid = _invalidAssignment(body, creating: true);
+    if (invalid != null) return _fail(400, 'INVALID_BODY', invalid);
+    final assignment = await _store.createAssignment(
+      courseId: courseId,
+      title: (body['title'] as String).trim(),
+      brief: body['brief'] as String? ?? '',
+      dueAt: DateTime.parse(body['dueAt'] as String),
+      status: body['status'] as String? ?? 'open',
+    );
+    return _Result(201, {'data': assignment});
+  }
+
+  /// The API's body checks for an assignment. Returns an error message or
+  /// null. [creating] makes title and dueAt required.
+  String? _invalidAssignment(Map<String, dynamic> body,
+      {required bool creating}) {
+    const fields = ['title', 'brief', 'dueAt', 'status'];
+    if (!creating && !fields.any(body.containsKey)) {
+      return 'Provide at least one of ${fields.join(', ')}';
+    }
+    final title = body['title'];
+    if (creating || body.containsKey('title')) {
+      if (title is! String || title.trim().isEmpty) {
+        return 'title is required';
+      }
+      if (title.length > 200) {
+        return 'title must be at most 200 characters';
+      }
+    }
+    final brief = body['brief'];
+    if (body.containsKey('brief')) {
+      if (brief is! String) return 'brief must be a string';
+      if (brief.length > 10000) return 'brief must be at most 10000 characters';
+    }
+    final dueAt = body['dueAt'];
+    if (creating || body.containsKey('dueAt')) {
+      if (dueAt is! String || DateTime.tryParse(dueAt) == null) {
+        return 'dueAt must be an ISO date';
+      }
+    }
+    if (body.containsKey('status') &&
+        !_assignmentStatuses.contains(body['status'])) {
+      return 'status must be one of ${_assignmentStatuses.join(', ')}';
+    }
+    return null;
+  }
+
   /// POST /assignments/:id/submissions, with the API's checks and codes.
   Future<_Result> _submit(
     Map<String, dynamic> assignment,
@@ -580,6 +660,10 @@ class OfflineClient extends http.BaseClient {
     if (assignment['status'] == 'draft') {
       return _fail(
           409, 'ASSIGNMENT_DRAFT', 'Assignment is not open for submissions');
+    }
+    if (assignment['status'] == 'closed') {
+      return _fail(
+          409, 'ASSIGNMENT_CLOSED', 'Assignment is closed for submissions');
     }
     final attachments = rawAttachments
         .whereType<Map>()
@@ -1156,6 +1240,7 @@ class OfflineClient extends http.BaseClient {
         return _fail(
             403, 'FORBIDDEN', 'You can only edit events of courses you teach');
       }
+      if (existing['assignmentId'] != null) return _assignmentEvent();
       // Absent keys keep their value; an explicit null clears it.
       final event = await _store.updateCalendarEvent(
         id: id,
@@ -1181,11 +1266,15 @@ class OfflineClient extends http.BaseClient {
         return _fail(403, 'FORBIDDEN',
             'You can only delete events of courses you teach');
       }
+      if (existing['assignmentId'] != null) return _assignmentEvent();
       await _store.deleteCalendarEvent(id);
       return _success();
     }
     return _methodNotAllowed();
   }
+
+  static _Result _assignmentEvent() => _fail(409, 'ASSIGNMENT_EVENT',
+      'This deadline comes from an assignment; edit the assignment instead');
 
   /// GET /calendar, scoped like the API: non-admins always get their own
   /// courses' events (plus course-less ones); admins may pass `userId`.

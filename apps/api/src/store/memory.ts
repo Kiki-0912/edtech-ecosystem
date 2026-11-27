@@ -171,7 +171,8 @@ export const submissions: Submission[] = [
   },
 ];
 
-export const calendarEvents: CalendarEvent[] = [
+// Seeded events are not linked to an assignment (assignment_id stays NULL).
+export const calendarEvents: Omit<CalendarEvent, "assignmentId">[] = [
   {
     id: "e-001",
     courseId: "c-001",

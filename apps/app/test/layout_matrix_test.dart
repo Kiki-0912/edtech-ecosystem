@@ -4,10 +4,12 @@ import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/auth/login_screen.dart';
 import 'package:edtech_app/auth/signup_screen.dart';
 import 'package:edtech_app/auth/verify_sms_screen.dart';
+import 'package:edtech_app/models/assignment.dart';
 import 'package:edtech_app/screens/attendance/attendance_mark_screen.dart';
 import 'package:edtech_app/screens/attendance/attendance_screen.dart';
 import 'package:edtech_app/screens/calendar/calendar_screen.dart';
 import 'package:edtech_app/screens/chat/chat_screen.dart';
+import 'package:edtech_app/screens/courses/assignment_form.dart';
 import 'package:edtech_app/screens/courses/assignment_screen.dart';
 import 'package:edtech_app/screens/courses/course_detail_screen.dart';
 import 'package:edtech_app/screens/courses/courses_screen.dart';
@@ -17,12 +19,33 @@ import 'package:edtech_app/screens/integrity/integrity_screen.dart';
 import 'package:edtech_app/screens/notes/notes_screen.dart';
 import 'package:edtech_app/screens/profile/profile_screen.dart';
 import 'package:edtech_app/screens/students/students_screen.dart';
+import 'package:edtech_app/services/offline_store.dart';
 import 'package:edtech_app/theme_controller.dart';
 import 'package:edtech_app/ui/app_theme.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// Offline assignments created in `setUpAll` for the draft/closed states.
+late String _draftId;
+late String _closedId;
+
+final _editing = Assignment(
+  id: 'a1',
+  courseId: 'c-cs301',
+  title: 'Heuristic Evaluation',
+  brief: 'Evaluate a web UI against Nielsen heuristics.\n' * 4,
+  dueAt: DateTime(2026, 12, 4, 17),
+  status: 'closed',
+  createdAt: DateTime(2026, 9),
+);
+
+/// The assignment form as `showFormSheet` lays it out (scrolling, padded).
+Widget _form([Assignment? initial]) => SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: AssignmentForm(courseId: 'c-cs301', initial: initial),
+    );
 
 /// Renders each redesigned screen for every role, at phone / tablet / desktop
 /// widths, in light and dark. Any overflow or exception fails the test.
@@ -35,6 +58,13 @@ final Map<String, Widget Function()> screens = {
   'course-detail': () => const CourseDetailScreen(courseId: 'c-cs301'),
   'assignment': () =>
       const AssignmentScreen(courseId: 'c-cs301', assignmentId: 'a1'),
+  // Students get "not found" for a draft; managers see it with its status.
+  'assignment-draft': () =>
+      AssignmentScreen(courseId: 'c-cs301', assignmentId: _draftId),
+  'assignment-closed': () =>
+      AssignmentScreen(courseId: 'c-cs301', assignmentId: _closedId),
+  'assignment-form-new': () => _form(),
+  'assignment-form-edit': () => _form(_editing),
   'integrity': () => const IntegrityScreen(),
   'calendar': () => const CalendarScreen(),
   'chat': () => const ChatScreen(),
@@ -112,6 +142,26 @@ Future<void> pumpScreen(
 }
 
 void main() {
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    final store = OfflineStore.instance;
+    final due = DateTime.now().add(const Duration(days: 2));
+    _draftId = (await store.createAssignment(
+      courseId: 'c-cs301',
+      title: 'Draft: competitive analysis of three note-taking apps',
+      brief: 'Not published yet.',
+      dueAt: due,
+      status: 'draft',
+    ))['id'] as String;
+    _closedId = (await store.createAssignment(
+      courseId: 'c-cs301',
+      title: 'Closed: accessibility audit',
+      brief: 'Audit a public website against WCAG 2.2 AA.',
+      dueAt: due,
+      status: 'closed',
+    ))['id'] as String;
+  });
+
   for (final role in roleIds.keys) {
     for (final entry in screens.entries) {
       testWidgets('${entry.key} renders for $role at all sizes, light & dark',

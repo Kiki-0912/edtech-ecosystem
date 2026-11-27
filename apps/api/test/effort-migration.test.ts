@@ -61,7 +61,11 @@ after(async () => {
 
 describe("migration 4: effort_scores_namespaced", () => {
   test("prefixes legacy rows and merges a legacy row with its namespaced twin", async () => {
-    assert.deepEqual(await runMigrations(pool), [4]);
+    // Migration 4 and every later one are pending.
+    assert.deepEqual(
+      await runMigrations(pool),
+      MIGRATIONS.filter((m) => m.version >= 4).map((m) => m.version),
+    );
     const { rows } = await pool.query<{ session_id: string; score: number }>(
       "SELECT session_id, score FROM effort_scores ORDER BY seq",
     );

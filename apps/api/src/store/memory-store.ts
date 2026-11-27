@@ -110,6 +110,8 @@ export interface CalendarEvent {
   id: string;
   courseId: string | null;
   departmentId?: string | null;
+  /** The assignment whose deadline this event mirrors, if any. */
+  assignmentId: string | null;
   title: string;
   kind: CalendarEventKind;
   startsAt: string;
@@ -670,6 +672,7 @@ function toCalendarEvent(row: Row): CalendarEvent {
     id: row.id,
     courseId: row.course_id ?? null,
     departmentId: row.department_id ?? null,
+    assignmentId: row.assignment_id ?? null,
     title: row.title,
     kind: row.kind as CalendarEventKind,
     startsAt: normDate(row.starts_at) ?? row.starts_at,
@@ -1057,6 +1060,95 @@ export function updateSubmission(
   if (updates.effortScore !== undefined) row.effort_score = updates.effortScore;
 }
 
+/** Fields a teacher or admin sets on an assignment. */
+export interface AssignmentInput {
+  title: string;
+  brief: string;
+  dueAt: string;
+  status: AssignmentStatus;
+}
+
+/**
+ * Keep an assignment's deadline event in step with it: none while it is a
+ * draft, otherwise exactly one `${title} due` event at `dueAt`.
+ */
+function syncAssignmentEvent(row: Row): void {
+  const existing = db.calendar_events.find((event) => event.assignment_id === row.id);
+  if (row.status === "draft") {
+    if (existing) {
+      db.calendar_events = db.calendar_events.filter((event) => event !== existing);
+    }
+    return;
+  }
+  if (existing) {
+    existing.course_id = row.course_id;
+    existing.title = `${row.title} due`;
+    existing.starts_at = row.due_at;
+    return;
+  }
+  db.calendar_events.push({
+    id: randomUUID(),
+    course_id: row.course_id,
+    department_id: null,
+    title: `${row.title} due`,
+    kind: "assignment",
+    starts_at: row.due_at,
+    ends_at: null,
+    assignment_id: row.id,
+  });
+}
+
+export function createAssignment(courseId: string, input: AssignmentInput): Assignment {
+  assertReference("courses", courseId, "assignments_course_id_fkey");
+  const row = {
+    id: randomUUID(),
+    course_id: courseId,
+    title: input.title,
+    brief: input.brief,
+    due_at: input.dueAt,
+    status: input.status,
+    created_at: nowISO(),
+  };
+  db.assignments.push(row);
+  syncAssignmentEvent(row);
+  return toAssignment(row);
+}
+
+export function updateAssignment(
+  assignmentId: string,
+  updates: Partial<AssignmentInput>,
+): Assignment | undefined {
+  const row = db.assignments.find((assignment) => assignment.id === assignmentId);
+  if (!row) return undefined;
+  if (updates.title !== undefined) row.title = updates.title;
+  if (updates.brief !== undefined) row.brief = updates.brief;
+  if (updates.dueAt !== undefined) row.due_at = updates.dueAt;
+  if (updates.status !== undefined) row.status = updates.status;
+  syncAssignmentEvent(row);
+  return toAssignment(row);
+}
+
+/**
+ * Delete an assignment with its submissions, telemetry batches, effort scores,
+ * integrity flags and deadline calendar event. Returns false if it doesn't exist.
+ */
+export function deleteAssignment(assignmentId: string): boolean {
+  if (!db.assignments.some((assignment) => assignment.id === assignmentId)) return false;
+  db.submissions = db.submissions.filter((entry) => entry.assignment_id !== assignmentId);
+  db.telemetry_batches = db.telemetry_batches.filter(
+    (batch) => batch.assignmentId !== assignmentId,
+  );
+  db.effort_scores = db.effort_scores.filter((score) => score.assignmentId !== assignmentId);
+  db.integrity_flags = db.integrity_flags.filter(
+    (entry) => entry.assignmentId !== assignmentId,
+  );
+  db.calendar_events = db.calendar_events.filter(
+    (event) => event.assignment_id !== assignmentId,
+  );
+  db.assignments = db.assignments.filter((assignment) => assignment.id !== assignmentId);
+  return true;
+}
+
 // ============================================
 // Calendar
 // ============================================
@@ -1099,6 +1191,7 @@ export function createCalendarEvent(input: {
     kind: input.kind,
     starts_at: input.startsAt,
     ends_at: input.endsAt ?? null,
+    assignment_id: null,
   };
   db.calendar_events.push(row);
   return toCalendarEvent(row);

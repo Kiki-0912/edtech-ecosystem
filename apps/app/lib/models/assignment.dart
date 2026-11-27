@@ -44,5 +44,7 @@ class Assignment {
   }
 
   bool get isOpen => status == 'open';
+  bool get isDraft => status == 'draft';
+  bool get isClosed => status == 'closed';
   bool get isOverdue => DateTime.now().isAfter(dueAt);
 }

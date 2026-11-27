@@ -53,6 +53,9 @@ function invalidEventDates(body: { startsAt?: string; endsAt?: string | null }):
   return null;
 }
 
+const ASSIGNMENT_EVENT_MESSAGE =
+  "This deadline comes from an assignment; edit the assignment instead";
+
 const fail = (
   reply: FastifyReply,
   statusCode: number,
@@ -180,6 +183,9 @@ export async function classroomRoutes(app: FastifyInstance) {
     ) {
       return fail(reply, 403, "FORBIDDEN", "You can only edit events of courses you teach");
     }
+    if (existing.assignmentId) {
+      return fail(reply, 409, "ASSIGNMENT_EVENT", ASSIGNMENT_EVENT_MESSAGE);
+    }
 
     const event = await updateCalendarEvent(request.params.eventId, body);
     if (!event) {
@@ -202,6 +208,9 @@ export async function classroomRoutes(app: FastifyInstance) {
       }
       if (!(await managesCourseId(caller, existing.courseId))) {
         return fail(reply, 403, "FORBIDDEN", "You can only delete events of courses you teach");
+      }
+      if (existing.assignmentId) {
+        return fail(reply, 409, "ASSIGNMENT_EVENT", ASSIGNMENT_EVENT_MESSAGE);
       }
 
       if (!(await deleteCalendarEvent(request.params.eventId))) {

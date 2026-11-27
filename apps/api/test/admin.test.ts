@@ -873,7 +873,7 @@ describe("overview", () => {
     assert.equal(overview.storage, "memory");
     assert.equal(overview.database, "ok");
     assert.equal(overview.schemaVersion, Math.max(...MIGRATIONS.map((m) => m.version)));
-    assert.equal(overview.schemaVersion, 4);
+    assert.equal(overview.schemaVersion, 5);
     assert.equal(overview.version, "0.1.0");
     assert.ok(Math.abs(Date.parse(overview.serverTime) - Date.now()) < 60_000);
   });

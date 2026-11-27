@@ -9,6 +9,7 @@ class CalendarEvent {
     required this.startsAt,
     required this.endsAt,
     this.departmentId,
+    this.assignmentId,
   });
 
   final String id;
@@ -19,6 +20,12 @@ class CalendarEvent {
   final DateTime startsAt;
   final DateTime? endsAt;
 
+  /// Set when the event is an assignment's deadline. Such events follow the
+  /// assignment and cannot be edited or deleted on their own.
+  final String? assignmentId;
+
+  bool get isAssignmentDeadline => assignmentId != null;
+
   factory CalendarEvent.fromJson(Map<String, dynamic> json) {
     return CalendarEvent(
       id: json['id'] as String,
@@ -28,6 +35,8 @@ class CalendarEvent {
       kind: json['kind'] as String,
       startsAt: parseServerTime(json['startsAt']) ?? DateTime.now(),
       endsAt: parseServerTime(json['endsAt']),
+      // Older APIs omit the key; both missing and null mean "not linked".
+      assignmentId: json['assignmentId'] as String?,
     );
   }
 
@@ -40,6 +49,7 @@ class CalendarEvent {
       'kind': kind,
       'startsAt': startsAt.toUtc().toIso8601String(),
       'endsAt': endsAt?.toUtc().toIso8601String(),
+      'assignmentId': assignmentId,
     };
   }
 }

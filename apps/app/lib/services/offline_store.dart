@@ -21,6 +21,7 @@ class OfflineStore {
   static const _messagesKey = 'offline_messages_v1';
   static const _calendarKey = 'offline_calendar_v1';
   static const _integrityKey = 'offline_integrity_v1';
+  static const _assignmentsKey = 'offline_assignments_v1';
 
   SharedPreferences? _prefs;
   bool _loaded = false;
@@ -34,6 +35,7 @@ class OfflineStore {
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> _calendar = [];
   List<Map<String, dynamic>> _integrity = [];
+  List<Map<String, dynamic>> _assignments = [];
 
   Future<void>? _loadFuture;
 
@@ -60,6 +62,13 @@ class OfflineStore {
     _messages = _read(_messagesKey);
     _calendar = _read(_calendarKey);
     _integrity = _read(_integrityKey);
+    _assignments = _read(_assignmentsKey);
+    // Keyed on presence, not emptiness: a teacher may delete every
+    // assignment, and that must survive a restart.
+    if (!(_prefs?.containsKey(_assignmentsKey) ?? false)) {
+      _seedAssignments();
+      await _persist(_assignmentsKey, _assignments);
+    }
     if (_students.isEmpty && _departments.isEmpty) {
       _seed();
       await _persistAll();
@@ -97,6 +106,7 @@ class OfflineStore {
     await _persist(_messagesKey, _messages);
     await _persist(_calendarKey, _calendar);
     await _persist(_integrityKey, _integrity);
+    await _persist(_assignmentsKey, _assignments);
   }
 
   String _id(String prefix) =>
@@ -344,6 +354,41 @@ class OfflineStore {
     ];
 
     _seedCalendar();
+  }
+
+  /// The API seed's assignments, due relative to the first launch.
+  void _seedAssignments() {
+    String due(int days) =>
+        DateTime.now().add(Duration(days: days)).toUtc().toIso8601String();
+    _assignments = [
+      {
+        'id': 'a1',
+        'courseId': 'c-cs301',
+        'title': 'Heuristic Evaluation',
+        'brief': 'Evaluate a web UI against Nielsen heuristics.',
+        'dueAt': due(3),
+        'status': 'open',
+        'createdAt': '2026-09-01T00:00:00.000Z',
+      },
+      {
+        'id': 'a2',
+        'courseId': 'c-cs301',
+        'title': 'Usability Study Report',
+        'brief': 'Write up findings from a usability test.',
+        'dueAt': due(10),
+        'status': 'open',
+        'createdAt': '2026-09-05T00:00:00.000Z',
+      },
+      {
+        'id': 'a3',
+        'courseId': 'c-cs210',
+        'title': 'Binary Search Trees',
+        'brief': 'Implement BST insert, delete, traverse.',
+        'dueAt': due(5),
+        'status': 'open',
+        'createdAt': '2026-09-03T00:00:00.000Z',
+      },
+    ];
   }
 
   void _seedCalendar() {
@@ -875,7 +920,7 @@ class OfflineStore {
           if (courseId != null && e['courseId'] != courseId) return false;
           return true;
         })
-        .map((e) => Map<String, dynamic>.from(e))
+        .map((e) => {...e, 'assignmentId': e['assignmentId']})
         .toList();
     rows.sort((a, b) => (a['startsAt'] ?? '')
         .toString()
@@ -900,6 +945,7 @@ class OfflineStore {
       'kind': kind,
       'startsAt': startsAt.toIso8601String(),
       'endsAt': endsAt?.toIso8601String(),
+      'assignmentId': null,
     };
     _calendar.add(event);
     await _persist(_calendarKey, _calendar);
@@ -956,6 +1002,108 @@ class OfflineStore {
     await _ensureLoaded();
     _calendar.removeWhere((e) => e['id'] == id);
     await _persist(_calendarKey, _calendar);
+  }
+
+  /* ============================================
+     ASSIGNMENTS
+     ============================================ */
+
+  /// Every assignment (optionally of one course), sorted by due date.
+  Future<List<Map<String, dynamic>>> getAssignments({String? courseId}) async {
+    await _ensureLoaded();
+    final rows = _assignments
+        .where((a) => courseId == null || a['courseId'] == courseId)
+        .map((a) => Map<String, dynamic>.from(a))
+        .toList()
+      ..sort((a, b) => a['dueAt'].toString().compareTo(b['dueAt'].toString()));
+    return rows;
+  }
+
+  Future<Map<String, dynamic>?> getAssignment(String id) async {
+    await _ensureLoaded();
+    final row = _assignments.where((a) => a['id'] == id).firstOrNull;
+    return row == null ? null : Map<String, dynamic>.from(row);
+  }
+
+  Future<Map<String, dynamic>> createAssignment({
+    required String courseId,
+    required String title,
+    required String brief,
+    required DateTime dueAt,
+    required String status,
+  }) async {
+    await _ensureLoaded();
+    final assignment = <String, dynamic>{
+      'id': _id('a'),
+      'courseId': courseId,
+      'title': title,
+      'brief': brief,
+      'dueAt': dueAt.toUtc().toIso8601String(),
+      'status': status,
+      'createdAt': DateTime.now().toUtc().toIso8601String(),
+    };
+    _assignments.add(assignment);
+    _syncDeadline(assignment);
+    await _persist(_assignmentsKey, _assignments);
+    await _persist(_calendarKey, _calendar);
+    return Map<String, dynamic>.from(assignment);
+  }
+
+  /// Changes only the given fields. Returns null when [id] is unknown.
+  Future<Map<String, dynamic>?> updateAssignment(
+    String id, {
+    String? title,
+    String? brief,
+    DateTime? dueAt,
+    String? status,
+  }) async {
+    await _ensureLoaded();
+    final assignment = _assignments.where((a) => a['id'] == id).firstOrNull;
+    if (assignment == null) return null;
+    if (title != null) assignment['title'] = title;
+    if (brief != null) assignment['brief'] = brief;
+    if (dueAt != null) assignment['dueAt'] = dueAt.toUtc().toIso8601String();
+    if (status != null) assignment['status'] = status;
+    _syncDeadline(assignment);
+    await _persist(_assignmentsKey, _assignments);
+    await _persist(_calendarKey, _calendar);
+    return Map<String, dynamic>.from(assignment);
+  }
+
+  /// Removes the assignment with its submissions, integrity reports and
+  /// calendar deadline.
+  Future<void> deleteAssignment(String id) async {
+    await _ensureLoaded();
+    _assignments.removeWhere((a) => a['id'] == id);
+    _submissions.removeWhere((s) => s['assignmentId'] == id);
+    _integrity.removeWhere((r) => r['assignmentId'] == id);
+    _calendar.removeWhere((e) => e['assignmentId'] == id);
+    await _persistAll();
+  }
+
+  /// Like the API: a non-draft assignment owns exactly one calendar event
+  /// (`<title> due` at its due time); a draft owns none.
+  void _syncDeadline(Map<String, dynamic> assignment) {
+    final id = assignment['id'];
+    if (assignment['status'] == 'draft') {
+      _calendar.removeWhere((e) => e['assignmentId'] == id);
+      return;
+    }
+    final event = _calendar.where((e) => e['assignmentId'] == id).firstOrNull;
+    final fields = <String, dynamic>{
+      'courseId': assignment['courseId'],
+      'departmentId': null,
+      'title': '${assignment['title']} due',
+      'kind': 'assignment',
+      'startsAt': assignment['dueAt'],
+      'endsAt': null,
+      'assignmentId': id,
+    };
+    if (event == null) {
+      _calendar.add({'id': _id('ev'), ...fields});
+    } else {
+      event.addAll(fields);
+    }
   }
 
   /* ============================================

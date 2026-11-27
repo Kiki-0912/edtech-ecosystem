@@ -142,7 +142,7 @@ describe("admin API on postgres", () => {
     );
     assert.deepEqual(
       versions.map((row) => row.version),
-      [1, 2, 3, 4],
+      [1, 2, 3, 4, 5],
     );
     const [column] = await sql<{ data_type: string; is_nullable: string; column_default: string }>(
       `SELECT data_type, is_nullable, column_default FROM information_schema.columns
@@ -167,7 +167,7 @@ describe("admin API on postgres", () => {
     const overview: Overview = res.json().data;
     assert.equal(overview.storage, "postgres");
     assert.equal(overview.database, "ok");
-    assert.equal(overview.schemaVersion, 4);
+    assert.equal(overview.schemaVersion, 5);
     assert.deepEqual(overview.counts, {
       students: 4,
       teachers: 1,

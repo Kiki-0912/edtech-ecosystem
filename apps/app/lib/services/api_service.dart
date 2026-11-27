@@ -13,6 +13,7 @@ import 'package:edtech_app/models/course.dart';
 import 'package:edtech_app/models/effort_report.dart';
 import 'package:edtech_app/models/submission.dart';
 import 'package:edtech_app/services/offline_client.dart';
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:http/http.dart' as http;
 
 /// Non-2xx API response. [message] is the API's error message when available.
@@ -58,6 +59,11 @@ class ApiService {
   /// disabled session) with the API's error. Wired to `AuthProvider.logout`
   /// by the app.
   void Function(ApiException error)? onUnauthorized;
+
+  /// Bumped after every successful assignment create/update/delete, so pages
+  /// still mounted under the current route (the course page below an
+  /// assignment) can reload instead of showing a stale list.
+  final ValueNotifier<int> assignmentsRevision = ValueNotifier<int>(0);
 
   bool get isOffline => _offlineOverride ?? AppConfig.offlineMode;
 
@@ -174,6 +180,67 @@ class ApiService {
     return List<Map<String, dynamic>>.from(
       jsonDecode(response.body)['data']['roster'] as List<dynamic>,
     );
+  }
+
+  /// `POST /courses/:courseId/assignments`: admin or the course's teacher.
+  /// [status] is `draft`, `open` (the API default) or `closed`.
+  Future<Assignment> createAssignment({
+    required String courseId,
+    required String title,
+    String brief = '',
+    required DateTime dueAt,
+    String? status,
+  }) async {
+    final response = await _client.post(
+      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/courses/$courseId/assignments'),
+      headers: _authHeaders(),
+      body: jsonEncode(<String, dynamic>{
+        'title': title,
+        'brief': brief,
+        // UTC with a `Z`, so the server stores an unambiguous instant.
+        'dueAt': dueAt.toUtc().toIso8601String(),
+        if (status != null) 'status': status,
+      }),
+    );
+    _throwOnError(response);
+    assignmentsRevision.value++;
+    return Assignment.fromJson(
+        jsonDecode(response.body)['data'] as Map<String, dynamic>);
+  }
+
+  /// `PATCH /assignments/:id`: only the given fields change.
+  Future<Assignment> updateAssignment(
+    String assignmentId, {
+    String? title,
+    String? brief,
+    DateTime? dueAt,
+    String? status,
+  }) async {
+    final response = await _client.patch(
+      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId'),
+      headers: _authHeaders(),
+      body: jsonEncode(<String, dynamic>{
+        if (title != null) 'title': title,
+        if (brief != null) 'brief': brief,
+        if (dueAt != null) 'dueAt': dueAt.toUtc().toIso8601String(),
+        if (status != null) 'status': status,
+      }),
+    );
+    _throwOnError(response);
+    assignmentsRevision.value++;
+    return Assignment.fromJson(
+        jsonDecode(response.body)['data'] as Map<String, dynamic>);
+  }
+
+  /// `DELETE /assignments/:id`; the API also removes its submissions and its
+  /// calendar deadline.
+  Future<void> deleteAssignment(String assignmentId) async {
+    final response = await _client.delete(
+      Uri.parse('${AppConfig.apiBaseUrl}/api/v1/assignments/$assignmentId'),
+      headers: _authHeaders(json: false),
+    );
+    _throwOnError(response);
+    assignmentsRevision.value++;
   }
 
   Future<Submission> submitAssignment({

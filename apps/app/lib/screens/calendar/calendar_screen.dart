@@ -6,6 +6,7 @@ import 'package:edtech_app/screens/home/home_widgets.dart' show kindLabel;
 import 'package:edtech_app/services/api_service.dart';
 import 'package:edtech_app/shell/app_shell.dart' show eventIcon, eventTone;
 import 'package:edtech_app/ui/ui.dart';
+import 'package:go_router/go_router.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -13,8 +14,14 @@ import 'package:provider/provider.dart';
 /// can create, edit and delete events (the API allows both roles). Teachers
 /// manage only their own courses' events; course-less (campus-wide) events are
 /// admin-only, so a teacher's new event always belongs to one of their courses.
+///
+/// Assignment deadlines (events with an `assignmentId`) are read-only here:
+/// they follow their assignment, so the details offer to open it instead.
 class CalendarScreen extends StatefulWidget {
-  const CalendarScreen({super.key});
+  const CalendarScreen({super.key, this.canOpenAssignments = true});
+
+  /// False where the router has no assignment pages (the admin console).
+  final bool canOpenAssignments;
 
   @override
   State<CalendarScreen> createState() => _CalendarScreenState();
@@ -177,9 +184,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
       context,
       title: e.title,
       builder: (ctx) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          StatusBadge(label: kindLabel(e.kind), tone: eventTone(e.kind)),
+          Align(
+            alignment: Alignment.centerLeft,
+            child:
+                StatusBadge(label: kindLabel(e.kind), tone: eventTone(e.kind)),
+          ),
           const SizedBox(height: AppSpacing.md),
           ListRow(
             leading: const Icon(Icons.event_outlined),
@@ -193,6 +204,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
               title: dept,
               subtitle: 'Department',
             ),
+          if (e.isAssignmentDeadline) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'This deadline comes from an assignment. '
+              'Change it on the assignment page.',
+              key: const Key('event-linked-note'),
+              style: ctx.text.bodyMedium,
+            ),
+            if (widget.canOpenAssignments && e.courseId != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.icon(
+                  key: const Key('event-open-assignment'),
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    context.go(
+                        '/courses/${e.courseId}/assignments/${e.assignmentId}');
+                  },
+                  icon: const Icon(Icons.assignment_outlined, size: 18),
+                  label: const Text('Open assignment'),
+                ),
+              ),
+            ],
+          ],
         ],
       ),
     );
@@ -276,12 +312,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     title: e.title,
                     subtitle: '${clockTime(e.startsAt)}'
                         '${e.endsAt != null ? ' – ${clockTime(e.endsAt!)}' : ''}',
-                    trailing: canEdit
+                    // Assignment deadlines are read-only for everyone.
+                    trailing: canEdit && !e.isAssignmentDeadline
                         ? Icon(Icons.edit_outlined,
                             size: 18, color: context.colors.textMuted)
                         : StatusBadge(
                             label: kindLabel(e.kind), tone: eventTone(e.kind)),
-                    onTap: () => canEdit ? _openEditor(e) : _showDetails(e),
+                    onTap: () => canEdit && !e.isAssignmentDeadline
+                        ? _openEditor(e)
+                        : _showDetails(e),
                   ),
               ],
             ),

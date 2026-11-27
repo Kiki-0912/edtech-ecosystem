@@ -67,7 +67,9 @@ GoRouter buildAdminRouter(AuthProvider auth) {
           // The shared screens below are reused as-is: they only need the
           // AuthProvider and a Scaffold, which the admin shell provides.
           _branch(adminDepartments, (_) => const DepartmentsScreen()),
-          _branch(adminCalendar, (_) => const CalendarScreen()),
+          // No assignment pages here, so deadlines are view-only.
+          _branch(adminCalendar,
+              (_) => const CalendarScreen(canOpenAssignments: false)),
           _branch(adminAttendance, (_) => const AttendanceScreen(), routes: [
             GoRoute(
               path: 'mark',
