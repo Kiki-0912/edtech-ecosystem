@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { ApiError, Attachment, Submission, User } from "../store/db";
+import type { ApiError, Assignment, Attachment, Course, Submission, User } from "../store/db";
 import {
   createSubmission,
   getAssignment,
@@ -14,7 +14,17 @@ import {
   getUsers,
   updateSubmission,
 } from "../store/db";
+import type { Caller } from "../middleware/scope";
 import { callerOf, managesCourse } from "../middleware/scope";
+
+/** Drafts are visible only to those who manage the course (its teacher, admins). */
+async function visibleAssignments(
+  caller: Caller | undefined,
+  course: Course,
+): Promise<Assignment[]> {
+  const all = await getAssignmentsByCourse(course.id);
+  return managesCourse(caller, course) ? all : all.filter((a) => a.status !== "draft");
+}
 
 const fail = (
   reply: FastifyReply,
@@ -75,7 +85,7 @@ export async function courseRoutes(app: FastifyInstance) {
       const roster = (await Promise.all(rosterPromises)).filter(
         (u: any): u is User => Boolean(u),
       );
-      const courseAssignments = await getAssignmentsByCourse(course.id);
+      const courseAssignments = await visibleAssignments(callerOf(request), course);
 
       return {
         data: {
@@ -97,7 +107,7 @@ export async function courseRoutes(app: FastifyInstance) {
       }
 
       return {
-        data: (await getAssignmentsByCourse(course.id)).sort(
+        data: (await visibleAssignments(callerOf(request), course)).sort(
           (a, b) => a.dueAt.localeCompare(b.dueAt),
         ),
       };
@@ -113,6 +123,10 @@ export async function courseRoutes(app: FastifyInstance) {
       }
 
       const course = await getCourse(assignment.courseId);
+      // A draft does not exist for anyone who cannot manage it.
+      if (assignment.status === "draft" && !managesCourse(callerOf(request), course)) {
+        return fail(reply, 404, "ASSIGNMENT_NOT_FOUND", "Assignment not found");
+      }
       return { data: { assignment, course: course ?? null } };
     },
   );
@@ -198,6 +212,9 @@ export async function courseRoutes(app: FastifyInstance) {
 
     if (assignment.status === "draft") {
       return fail(reply, 409, "ASSIGNMENT_DRAFT", "Assignment is not open for submissions");
+    }
+    if (assignment.status === "closed") {
+      return fail(reply, 409, "ASSIGNMENT_CLOSED", "Assignment is closed for submissions");
     }
 
     const submittedAt = new Date().toISOString();

@@ -127,6 +127,9 @@ export const createDepartment: Store["createDepartment"] = (...args) => active()
 export const updateDepartment: Store["updateDepartment"] = (...args) => active().updateDepartment(...args);
 export const deleteDepartment: Store["deleteDepartment"] = (...args) => active().deleteDepartment(...args);
 export const getAssignment: Store["getAssignment"] = (...args) => active().getAssignment(...args);
+export const createAssignment: Store["createAssignment"] = (...args) => active().createAssignment(...args);
+export const updateAssignment: Store["updateAssignment"] = (...args) => active().updateAssignment(...args);
+export const deleteAssignment: Store["deleteAssignment"] = (...args) => active().deleteAssignment(...args);
 export const getSubmissionsByAssignment: Store["getSubmissionsByAssignment"] = (...args) => active().getSubmissionsByAssignment(...args);
 export const getSubmission: Store["getSubmission"] = (...args) => active().getSubmission(...args);
 export const createSubmission: Store["createSubmission"] = (...args) => active().createSubmission(...args);

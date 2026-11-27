@@ -2,9 +2,11 @@ import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/formats.dart';
 import 'package:edtech_app/models/assignment.dart';
 import 'package:edtech_app/models/attachment.dart';
+import 'package:edtech_app/models/course.dart';
 import 'package:edtech_app/models/submission.dart';
+import 'package:edtech_app/screens/courses/assignment_form.dart';
 import 'package:edtech_app/screens/courses/course_detail_screen.dart'
-    show assignmentStatus;
+    show assignmentStatus, managesCourse;
 import 'package:edtech_app/services/api_service.dart';
 import 'package:edtech_app/ui/ui.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
 /// Assignment detail. Students submit work; staff see the class roster.
+/// Managers (admins, the course's teacher) also edit, re-status and delete.
 class AssignmentScreen extends StatefulWidget {
   const AssignmentScreen({
     super.key,
@@ -28,7 +31,9 @@ class AssignmentScreen extends StatefulWidget {
 
 class _AssignmentScreenState extends State<AssignmentScreen> {
   Assignment? _assignment;
+  Course? _course;
   List<Map<String, dynamic>> _roster = const [];
+  bool _statusBusy = false;
 
   /// The signed-in student's own submission, from the last submit response.
   /// The roster (which carries everyone's status) is staff-only in the API.
@@ -55,10 +60,18 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
         isStudent
             ? Future.value(const <Map<String, dynamic>>[])
             : api.getRoster(widget.assignmentId),
+        // Only to decide who manages it; students never manage a course.
+        isStudent
+            ? Future.value(const <Course>[])
+            : api.getCourses().catchError((_) => const <Course>[]),
       ]);
       if (!mounted) return;
+      final assignment = results[0] as Assignment;
       setState(() {
-        _assignment = results[0] as Assignment;
+        _assignment = assignment;
+        _course = (results[2] as List<Course>)
+            .where((c) => c.id == assignment.courseId)
+            .firstOrNull;
         _roster = results[1] as List<Map<String, dynamic>>;
         _loading = false;
       });
@@ -68,6 +81,52 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
         _error = e;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _edit(Assignment a) async {
+    final saved =
+        await showAssignmentForm(context, courseId: a.courseId, initial: a);
+    if (saved == null || !mounted) return;
+    setState(() => _assignment = saved);
+    showToast(context, 'Assignment updated', kind: ToastKind.success);
+    await _load();
+  }
+
+  Future<void> _setStatus(Assignment a, String status) async {
+    if (status == a.status) return;
+    setState(() => _statusBusy = true);
+    try {
+      final saved =
+          await ApiService.instance.updateAssignment(a.id, status: status);
+      if (!mounted) return;
+      setState(() => _assignment = saved);
+      showToast(context, 'Marked ${kAssignmentStatuses[status]}',
+          kind: ToastKind.success);
+    } catch (e) {
+      if (mounted) showToast(context, friendlyError(e), kind: ToastKind.error);
+    } finally {
+      if (mounted) setState(() => _statusBusy = false);
+    }
+  }
+
+  Future<void> _delete(Assignment a) async {
+    final ok = await confirmDialog(
+      context,
+      title: 'Delete assignment?',
+      message: '"${a.title}" will be removed with all its submissions and '
+          'its calendar deadline. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    try {
+      await ApiService.instance.deleteAssignment(a.id);
+      if (!mounted) return;
+      showToast(context, 'Assignment deleted', kind: ToastKind.success);
+      context.go('/courses/${widget.courseId}');
+    } catch (e) {
+      if (mounted) showToast(context, friendlyError(e), kind: ToastKind.error);
     }
   }
 
@@ -107,18 +166,65 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
             'submittedAt': _mine!.submittedAt?.toUtc().toIso8601String(),
           };
 
+    final manages = user?.isStudent == false && managesCourse(user, _course);
+
     return AppPage(
       title: a.title,
       subtitle: 'Due ${shortDate(a.dueAt)} at ${clockTime(a.dueAt)}',
       onRefresh: _load,
-      actions: [StatusBadge(label: statusLabel, tone: statusTone)],
+      actions: [
+        StatusBadge(label: statusLabel, tone: statusTone),
+        if (manages) ...[
+          OutlinedButton.icon(
+            key: const Key('assignment-edit'),
+            onPressed: () => _edit(a),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            label: const Text('Edit'),
+          ),
+          OutlinedButton.icon(
+            key: const Key('assignment-delete'),
+            onPressed: () => _delete(a),
+            style: OutlinedButton.styleFrom(
+                foregroundColor: context.colors.danger),
+            icon: const Icon(Icons.delete_outline_rounded, size: 18),
+            label: const Text('Delete'),
+          ),
+        ],
+      ],
       children: [
         back,
         SectionCard(
-          title: 'Brief',
-          child: Text(a.brief.isEmpty ? 'No description provided.' : a.brief,
+          title: 'Instructions',
+          child: Text(a.brief.isEmpty ? 'No instructions provided.' : a.brief,
               style: context.text.bodyLarge),
         ),
+        if (manages)
+          SectionCard(
+            title: 'Status',
+            subtitle: switch (a.status) {
+              'draft' => 'Hidden from students',
+              'closed' => 'Visible, no longer accepting work',
+              _ => 'Visible and accepting work',
+            },
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SegmentedButton<String>(
+                key: const Key('assignment-status-quick'),
+                showSelectedIcon: false,
+                segments: [
+                  for (final s in kAssignmentStatuses.entries)
+                    ButtonSegment(
+                      value: s.key,
+                      label: Text(s.value, key: Key('assignment-set-${s.key}')),
+                    ),
+                ],
+                selected: {a.status},
+                onSelectionChanged: _statusBusy
+                    ? null
+                    : (selection) => _setStatus(a, selection.first),
+              ),
+            ),
+          ),
         if (user?.isStudent == true)
           _SubmissionCard(
             assignment: a,
@@ -128,6 +234,7 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
               setState(() => _mine = submission);
               await _load();
             },
+            onRefresh: _load,
           )
         else
           _RosterCard(
@@ -159,12 +266,16 @@ class _SubmissionCard extends StatefulWidget {
     required this.studentId,
     required this.current,
     required this.onSubmitted,
+    required this.onRefresh,
   });
 
   final Assignment assignment;
   final String studentId;
   final Map<String, dynamic>? current;
   final Future<void> Function(Submission submission) onSubmitted;
+
+  /// Reloads the assignment, e.g. after it was closed while the page was open.
+  final Future<void> Function() onRefresh;
 
   @override
   State<_SubmissionCard> createState() => _SubmissionCardState();
@@ -212,7 +323,13 @@ class _SubmissionCardState extends State<_SubmissionCard> {
       showToast(context, 'Work submitted', kind: ToastKind.success);
       await widget.onSubmitted(submission);
     } catch (e) {
-      if (mounted) showToast(context, friendlyError(e), kind: ToastKind.error);
+      if (!mounted) return;
+      showToast(context, friendlyError(e), kind: ToastKind.error);
+      // Closed (or moved back to draft) since the page loaded: show that.
+      if (e is ApiException &&
+          (e.code == 'ASSIGNMENT_CLOSED' || e.code == 'ASSIGNMENT_DRAFT')) {
+        await widget.onRefresh();
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -242,8 +359,18 @@ class _SubmissionCardState extends State<_SubmissionCard> {
               ),
             ),
           if (!open)
-            Text('This assignment is closed for submissions.',
-                style: context.text.bodyMedium)
+            Row(
+              key: const Key('assignment-closed'),
+              children: [
+                Icon(Icons.lock_outline_rounded,
+                    size: 20, color: context.colors.textMuted),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text('This assignment is closed',
+                      style: context.text.titleSmall),
+                ),
+              ],
+            )
           else ...[
             TextField(
               key: const Key('submission-link'),

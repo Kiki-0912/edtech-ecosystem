@@ -215,4 +215,89 @@ void main() {
       throwsA(isA<ApiException>().having((e) => e.statusCode, 'status', 400)),
     );
   });
+
+  test('teacher creates an assignment; student sees, submits; close; delete',
+      () async {
+    if (!await apiReachable()) {
+      markTestSkipped('API not reachable on localhost:4000');
+      return;
+    }
+    Future<void> signIn(String who) async {
+      final login = await api.login(phone: who, password: password);
+      api.token = login['token'] as String;
+    }
+
+    const teacher = '+15550001001'; // seeded Tayyab, teaches c-001
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final due = DateTime.now().add(const Duration(days: 3));
+
+    await signIn(teacher);
+    final created = await api.createAssignment(
+      courseId: 'c-001',
+      title: 'Integration $stamp',
+      brief: 'Created by api_integration_test.',
+      dueAt: due,
+    );
+    expect(created.status, 'open');
+    expect(created.dueAt.difference(due).inSeconds.abs(), lessThan(1));
+    final draft = await api.createAssignment(
+      courseId: 'c-001',
+      title: 'Integration draft $stamp',
+      dueAt: due,
+      status: 'draft',
+    );
+    try {
+      // Exactly one read-only deadline for the open assignment, none for
+      // the draft.
+      final events = await api.getCalendar('u-teacher-1');
+      final linked = events.where((e) => e.assignmentId == created.id);
+      expect(linked, hasLength(1));
+      expect(linked.single.title, 'Integration $stamp due');
+      expect(events.where((e) => e.assignmentId == draft.id), isEmpty);
+      await expectLater(
+          api.deleteCalendarEvent(linked.single.id),
+          throwsA(isA<ApiException>()
+              .having((e) => e.code, 'code', 'ASSIGNMENT_EVENT')));
+
+      await signIn(phone);
+      final visible = await api.getAssignments('c-001');
+      expect(visible.map((a) => a.id), contains(created.id));
+      expect(visible.map((a) => a.id), isNot(contains(draft.id)));
+      await expectLater(
+          api.getAssignment(draft.id),
+          throwsA(isA<ApiException>()
+              .having((e) => e.code, 'code', 'ASSIGNMENT_NOT_FOUND')));
+      await expectLater(
+          api.createAssignment(
+              courseId: 'c-001', title: 'Student attempt', dueAt: due),
+          throwsA(
+              isA<ApiException>().having((e) => e.statusCode, 'status', 403)));
+      final submission = await api.submitAssignment(
+          assignmentId: created.id, studentId: 'u-student-1');
+      expect(submission.status, 'submitted');
+
+      await signIn(teacher);
+      final closed = await api.updateAssignment(created.id, status: 'closed');
+      expect(closed.isClosed, isTrue);
+
+      await signIn(phone);
+      await expectLater(
+          api.submitAssignment(
+              assignmentId: created.id, studentId: 'u-student-1'),
+          throwsA(isA<ApiException>()
+              .having((e) => e.code, 'code', 'ASSIGNMENT_CLOSED')));
+    } finally {
+      await signIn(teacher);
+      await api.deleteAssignment(created.id);
+      await api.deleteAssignment(draft.id);
+    }
+    await expectLater(
+        api.getAssignment(created.id),
+        throwsA(isA<ApiException>()
+            .having((e) => e.code, 'code', 'ASSIGNMENT_NOT_FOUND')));
+    expect(
+        (await api.getCalendar('u-teacher-1'))
+            .where((e) => e.assignmentId == created.id),
+        isEmpty);
+  });
 }

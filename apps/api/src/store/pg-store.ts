@@ -3,6 +3,7 @@ import pg from "pg";
 import type { Store } from "./db";
 import type {
   Attachment,
+  AssignmentStatus,
   AttendanceRecord,
   CalendarEventKind,
   DepartmentCategory,
@@ -195,6 +196,27 @@ function setClause(
     sql: entries.map(([column], index) => `${column} = $${index + offset}`).join(", "),
     params: entries.map(([, value]) => value),
   };
+}
+
+/**
+ * Keep an assignment's deadline event in step with it (see memory-store's
+ * syncAssignmentEvent): none while it is a draft, otherwise exactly one.
+ */
+async function syncAssignmentEvent(client: Queryable, row: Row): Promise<void> {
+  if (row.status === "draft") {
+    await client.query("DELETE FROM calendar_events WHERE assignment_id = $1", [row.id]);
+    return;
+  }
+  await client.query(
+    `INSERT INTO calendar_events
+       (id, course_id, department_id, title, kind, starts_at, ends_at, assignment_id)
+     VALUES ($1, $2, NULL, $3, 'assignment', $4, NULL, $5)
+     ON CONFLICT (assignment_id) DO UPDATE SET
+       course_id = EXCLUDED.course_id,
+       title = EXCLUDED.title,
+       starts_at = EXCLUDED.starts_at`,
+    [randomUUID(), row.course_id, `${row.title} due`, row.due_at, row.id],
+  );
 }
 
 function toEffortScore(row: Row): EffortScore {
@@ -420,6 +442,64 @@ export function createPgStore(pool: pg.Pool): Store {
     async getAssignment(assignmentId) {
       const row = await one("SELECT * FROM assignments WHERE id = $1", [assignmentId]);
       return row ? toAssignment(row) : undefined;
+    },
+    async createAssignment(courseId, input) {
+      return withTransaction(pool, async (client) => {
+        const row = (
+          await client.query(
+            `INSERT INTO assignments (id, course_id, title, brief, due_at, status, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [
+              randomUUID(),
+              courseId,
+              input.title,
+              input.brief,
+              input.dueAt,
+              input.status satisfies AssignmentStatus,
+              nowISO(),
+            ],
+          )
+        ).rows[0] as Row;
+        await syncAssignmentEvent(client, row);
+        return toAssignment(row);
+      });
+    },
+    async updateAssignment(assignmentId, updates) {
+      return withTransaction(pool, async (client) => {
+        const { sql, params } = setClause(
+          {
+            title: updates.title,
+            brief: updates.brief,
+            due_at: updates.dueAt,
+            status: updates.status,
+          },
+          2,
+        );
+        const row = (
+          await client.query(
+            sql
+              ? `UPDATE assignments SET ${sql} WHERE id = $1 RETURNING *`
+              : "SELECT * FROM assignments WHERE id = $1",
+            [assignmentId, ...params],
+          )
+        ).rows[0] as Row | undefined;
+        if (!row) return undefined;
+        await syncAssignmentEvent(client, row);
+        return toAssignment(row);
+      });
+    },
+    async deleteAssignment(assignmentId) {
+      return withTransaction(pool, async (client) => {
+        // No foreign keys on these two; submissions, telemetry batches and the
+        // deadline calendar event cascade from assignments.
+        for (const table of ["effort_scores", "integrity_flags"]) {
+          await client.query(`DELETE FROM ${table} WHERE assignment_id = $1`, [assignmentId]);
+        }
+        const result = await client.query("DELETE FROM assignments WHERE id = $1", [
+          assignmentId,
+        ]);
+        return (result.rowCount ?? 0) > 0;
+      });
     },
     async getSubmissionsByAssignment(assignmentId) {
       return (

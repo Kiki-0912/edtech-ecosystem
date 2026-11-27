@@ -76,7 +76,7 @@ describe("postgres store", () => {
       const { rows } = await pool.query("SELECT version FROM schema_migrations");
       assert.deepEqual(
         rows.map((row) => row.version).sort(),
-        [1, 2, 3, 4],
+        [1, 2, 3, 4, 5],
       );
     } finally {
       await pool.end();

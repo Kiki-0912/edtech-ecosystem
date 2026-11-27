@@ -11,6 +11,7 @@ interface ApiError {
 import { authRoutes } from "./routes/auth";
 import { classroomRoutes } from "./routes/classroom";
 import { courseRoutes } from "./routes/courses";
+import { assignmentRoutes } from "./routes/assignments";
 import { telemetryRoutes } from "./routes/telemetry";
 import studentsRoutes from "./routes/students";
 import departmentsRoutes from "./routes/departments";
@@ -131,6 +132,7 @@ export async function buildApp() {
   });
 
   await app.register(courseRoutes, { prefix: "/api/v1" });
+  await app.register(assignmentRoutes, { prefix: "/api/v1" });
   await app.register(telemetryRoutes, { prefix: "/api/v1" });
   await app.register(classroomRoutes, { prefix: "/api/v1" });
   await app.register(authRoutes, { prefix: "/api/v1/auth" });

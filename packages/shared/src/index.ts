@@ -85,6 +85,22 @@ export interface Assignment {
   createdAt: string;
 }
 
+/**
+ * Body of POST /courses/:courseId/assignments (admins, and the course's teacher).
+ * `title` is trimmed (1-200 chars); `brief` is 0-10000 chars (default "");
+ * `dueAt` must parse as a date and is stored exactly as sent; `status` defaults
+ * to "open". Drafts are hidden from everyone who does not manage the course.
+ */
+export interface AssignmentCreate {
+  title: string;
+  brief?: string;
+  dueAt: string;
+  status?: AssignmentStatus;
+}
+
+/** Body of PATCH /assignments/:assignmentId: any non-empty subset of the create fields. */
+export type AssignmentUpdate = Partial<Required<AssignmentCreate>>;
+
 export interface Submission {
   id: string;
   assignmentId: string;
@@ -101,6 +117,13 @@ export type CalendarEventKind = "assignment" | "quiz" | "class" | "institution";
 export interface CalendarEvent {
   id: string;
   courseId: string | null;
+  departmentId?: string | null;
+  /**
+   * Set on the deadline event the API keeps in sync with an assignment (none
+   * while it is a draft). Such events cannot be edited or deleted through
+   * /calendar (409 ASSIGNMENT_EVENT); edit the assignment instead.
+   */
+  assignmentId: string | null;
   title: string;
   kind: CalendarEventKind;
   startsAt: string;

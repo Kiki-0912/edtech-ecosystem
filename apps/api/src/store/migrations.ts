@@ -287,4 +287,15 @@ UPDATE effort_scores
  WHERE left(session_id, length(student_id) + 1) <> student_id || ':';
 `,
   },
+  {
+    // An assignment's deadline is mirrored as one calendar event, kept in sync
+    // by the store and removed with the assignment. Unique: at most one each.
+    version: 5,
+    name: "calendar_assignment_link",
+    sql: `
+ALTER TABLE calendar_events
+  ADD COLUMN assignment_id TEXT NULL REFERENCES assignments (id) ON DELETE CASCADE;
+CREATE UNIQUE INDEX idx_calendar_assignment ON calendar_events (assignment_id);
+`,
+  },
 ];

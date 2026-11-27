@@ -2,6 +2,8 @@ import 'package:edtech_app/auth/auth_provider.dart';
 import 'package:edtech_app/formats.dart';
 import 'package:edtech_app/models/assignment.dart';
 import 'package:edtech_app/models/course.dart';
+import 'package:edtech_app/models/user.dart';
+import 'package:edtech_app/screens/courses/assignment_form.dart';
 import 'package:edtech_app/services/api_service.dart';
 import 'package:edtech_app/ui/ui.dart';
 import 'package:go_router/go_router.dart';
@@ -28,7 +30,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   @override
   void initState() {
     super.initState();
+    ApiService.instance.assignmentsRevision.addListener(_load);
     _load();
+  }
+
+  @override
+  void dispose() {
+    ApiService.instance.assignmentsRevision.removeListener(_load);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -64,6 +73,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     }
   }
 
+  Future<void> _create(Course course) async {
+    final created = await showAssignmentForm(context, courseId: course.id);
+    if (created == null || !mounted) return;
+    // The list reloads through ApiService.assignmentsRevision.
+    showToast(context, 'Assignment created', kind: ToastKind.success);
+  }
+
   @override
   Widget build(BuildContext context) {
     final course = _course;
@@ -94,6 +110,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
           '${course.teacherName != null ? ' · ${course.teacherName}' : ''}',
       onRefresh: _load,
       actions: [
+        if (managesCourse(user, course))
+          FilledButton.icon(
+            key: const Key('assignment-create'),
+            onPressed: () => _create(course),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('New assignment'),
+          ),
         OutlinedButton.icon(
           key: const Key('course-chat'),
           onPressed: () => context.go('/chat?course=${course.id}'),
@@ -207,7 +230,16 @@ class AssignmentRow extends StatelessWidget {
   }
 }
 
+/// Like the API: admins manage every course, teachers the ones they teach.
+/// Managers create, edit and delete assignments and see drafts.
+bool managesCourse(User? user, Course? course) {
+  if (user == null) return false;
+  if (user.isAdmin) return true;
+  return user.isTeacher && course != null && course.teacherId == user.id;
+}
+
 (String, Tone) assignmentStatus(Assignment a) {
+  if (a.isDraft) return ('Draft', Tone.info);
   if (!a.isOpen) return ('Closed', Tone.neutral);
   if (a.isOverdue) return ('Overdue', Tone.danger);
   final days = a.dueAt.difference(DateTime.now()).inDays;
