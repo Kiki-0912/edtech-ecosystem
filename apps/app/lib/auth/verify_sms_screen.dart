@@ -40,8 +40,7 @@ class _VerifySmsScreenState extends State<VerifySmsScreen> {
     _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return t.cancel();
       setState(
-        () => _resendSeconds = _resendSeconds <= 1 ? 0 : _resendSeconds - 1,
-      );
+          () => _resendSeconds = _resendSeconds <= 1 ? 0 : _resendSeconds - 1);
       if (_resendSeconds == 0) t.cancel();
     });
   }
@@ -63,11 +62,8 @@ class _VerifySmsScreenState extends State<VerifySmsScreen> {
       showToast(context, 'Verification code sent', kind: ToastKind.success);
       _codeFocus.requestFocus();
     } else {
-      showToast(
-        context,
-        friendlyError(auth.error ?? 'Could not send code'),
-        kind: ToastKind.error,
-      );
+      showToast(context, friendlyError(auth.error ?? 'Could not send code'),
+          kind: ToastKind.error);
     }
   }
 
@@ -84,11 +80,8 @@ class _VerifySmsScreenState extends State<VerifySmsScreen> {
     if (!mounted) return;
     // On success the router's auth refresh navigates to "/".
     if (!ok) {
-      showToast(
-        context,
-        friendlyError(auth.error ?? 'Invalid code'),
-        kind: ToastKind.error,
-      );
+      showToast(context, friendlyError(auth.error ?? 'Invalid code'),
+          kind: ToastKind.error);
     }
   }
 
@@ -175,10 +168,8 @@ class _VerifySmsScreenState extends State<VerifySmsScreen> {
                   const SizedBox(height: AppSpacing.sm),
                   Center(
                     child: _resendSeconds > 0
-                        ? Text(
-                            'Resend code in ${_resendSeconds}s',
-                            style: context.text.bodySmall,
-                          )
+                        ? Text('Resend code in ${_resendSeconds}s',
+                            style: context.text.bodySmall)
                         : TextButton(
                             key: const Key('sms-resend'),
                             onPressed: loading ? null : _sendCode,
@@ -216,20 +207,14 @@ class _StepIndicator extends StatelessWidget {
             ),
             child: done
                 ? Icon(Icons.check_rounded, size: 14, color: c.onAccent)
-                : Text(
-                    '${i + 1}',
-                    style: context.text.labelSmall?.copyWith(
-                      color: active ? c.onAccent : c.textMuted,
-                    ),
-                  ),
+                : Text('${i + 1}',
+                    style: context.text.labelSmall
+                        ?.copyWith(color: active ? c.onAccent : c.textMuted)),
           ),
           const SizedBox(width: AppSpacing.xs),
-          Text(
-            label,
-            style: context.text.labelMedium?.copyWith(
-              color: active ? c.textPrimary : c.textMuted,
-            ),
-          ),
+          Text(label,
+              style: context.text.labelMedium
+                  ?.copyWith(color: active ? c.textPrimary : c.textMuted)),
         ],
       );
     }

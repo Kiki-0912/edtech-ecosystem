@@ -101,12 +101,9 @@ class _BarPainter extends CustomPainter {
         ellipsis: '…',
       )..layout(maxWidth: slot);
       tp.paint(
-        canvas,
-        Offset(
-          slot * i + (slot - tp.width) / 2,
-          chartH + (labelHeight - tp.height) / 2 + 2,
-        ),
-      );
+          canvas,
+          Offset(slot * i + (slot - tp.width) / 2,
+              chartH + (labelHeight - tp.height) / 2 + 2));
     }
   }
 
@@ -144,10 +141,7 @@ class DonutChart extends StatelessWidget {
           CustomPaint(
             size: Size.square(size),
             painter: _DonutPainter(
-              values: values,
-              colors: colors,
-              track: c.surfaceMuted,
-            ),
+                values: values, colors: colors, track: c.surfaceMuted),
           ),
           if (centerTitle != null)
             Column(
@@ -165,11 +159,8 @@ class DonutChart extends StatelessWidget {
 }
 
 class _DonutPainter extends CustomPainter {
-  _DonutPainter({
-    required this.values,
-    required this.colors,
-    required this.track,
-  });
+  _DonutPainter(
+      {required this.values, required this.colors, required this.track});
 
   final List<double> values;
   final List<Color> colors;
@@ -193,13 +184,8 @@ class _DonutPainter extends CustomPainter {
       if (sweep <= 0) continue;
       final visible =
           values.where((v) => v > 0).length > 1 ? sweep - gap : sweep;
-      canvas.drawArc(
-        rect,
-        start,
-        math.max(visible, 0.001),
-        false,
-        base..color = colors[i % colors.length],
-      );
+      canvas.drawArc(rect, start, math.max(visible, 0.001), false,
+          base..color = colors[i % colors.length]);
       start += sweep;
     }
   }
@@ -227,10 +213,8 @@ class ChartLegend extends StatelessWidget {
               Container(
                 width: 10,
                 height: 10,
-                decoration: BoxDecoration(
-                  color: item.value,
-                  shape: BoxShape.circle,
-                ),
+                decoration:
+                    BoxDecoration(color: item.value, shape: BoxShape.circle),
               ),
               const SizedBox(width: AppSpacing.xxs + 2),
               Text(item.key, style: context.text.labelMedium),

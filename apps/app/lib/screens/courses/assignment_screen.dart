@@ -87,19 +87,16 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
     );
 
     if (a == null) {
-      return AppPage(
-        title: 'Assignment',
-        children: [
-          back,
-          AsyncBody(
-            loading: _loading,
-            error: _error,
-            onRetry: _load,
-            isEmpty: false,
-            builder: (_) => const SizedBox.shrink(),
-          ),
-        ],
-      );
+      return AppPage(title: 'Assignment', children: [
+        back,
+        AsyncBody(
+          loading: _loading,
+          error: _error,
+          onRetry: _load,
+          isEmpty: false,
+          builder: (_) => const SizedBox.shrink(),
+        ),
+      ]);
     }
 
     final (statusLabel, statusTone) = assignmentStatus(a);
@@ -119,10 +116,8 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
         back,
         SectionCard(
           title: 'Brief',
-          child: Text(
-            a.brief.isEmpty ? 'No description provided.' : a.brief,
-            style: context.text.bodyLarge,
-          ),
+          child: Text(a.brief.isEmpty ? 'No description provided.' : a.brief,
+              style: context.text.bodyLarge),
         ),
         if (user?.isStudent == true)
           _SubmissionCard(
@@ -135,7 +130,10 @@ class _AssignmentScreenState extends State<AssignmentScreen> {
             },
           )
         else
-          _RosterCard(roster: _roster, assignmentId: a.id),
+          _RosterCard(
+            roster: _roster,
+            assignmentId: a.id,
+          ),
       ],
     );
   }
@@ -188,11 +186,8 @@ class _SubmissionCardState extends State<_SubmissionCard> {
     final url = _link.text.trim();
     final uri = Uri.tryParse(url);
     if (url.isEmpty || uri == null || !uri.hasScheme) {
-      showToast(
-        context,
-        'Paste a full link, e.g. https://docs.google.com/…',
-        kind: ToastKind.error,
-      );
+      showToast(context, 'Paste a full link, e.g. https://docs.google.com/…',
+          kind: ToastKind.error);
       return;
     }
     setState(() => _busy = true);
@@ -233,9 +228,7 @@ class _SubmissionCardState extends State<_SubmissionCard> {
     return SectionCard(
       title: 'Your submission',
       trailing: StatusBadge(
-        label: submissionLabel(status),
-        tone: submissionTone(status),
-      ),
+          label: submissionLabel(status), tone: submissionTone(status)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -249,10 +242,8 @@ class _SubmissionCardState extends State<_SubmissionCard> {
               ),
             ),
           if (!open)
-            Text(
-              'This assignment is closed for submissions.',
-              style: context.text.bodyMedium,
-            )
+            Text('This assignment is closed for submissions.',
+                style: context.text.bodyMedium)
           else ...[
             TextField(
               key: const Key('submission-link'),
@@ -307,24 +298,19 @@ class _RosterCard extends StatelessWidget {
       subtitle: '$handedIn of ${roster.length} handed in',
       child: roster.isEmpty
           ? const EmptyState(
-              icon: Icons.groups_outlined,
-              title: 'No students enrolled',
-            )
+              icon: Icons.groups_outlined, title: 'No students enrolled')
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 ProgressBar(
-                  value: roster.isEmpty ? 0 : handedIn / roster.length,
-                  tone: Tone.success,
-                ),
+                    value: roster.isEmpty ? 0 : handedIn / roster.length,
+                    tone: Tone.success),
                 const SizedBox(height: AppSpacing.sm),
                 for (final r in roster)
                   ListRow(
                     key: Key('roster-${r['studentId']}'),
                     leading: Avatar(
-                      name: r['displayName']?.toString() ?? '?',
-                      size: 36,
-                    ),
+                        name: r['displayName']?.toString() ?? '?', size: 36),
                     title: r['displayName']?.toString() ?? 'Student',
                     subtitle: r['effortScore'] != null
                         ? 'Effort score ${r['effortScore']}'
@@ -334,8 +320,7 @@ class _RosterCard extends StatelessWidget {
                       tone: submissionTone(r['status']?.toString()),
                     ),
                     onTap: () => context.go(
-                      '/integrity?assignment=$assignmentId&student=${r['studentId']}',
-                    ),
+                        '/integrity?assignment=$assignmentId&student=${r['studentId']}'),
                   ),
               ],
             ),

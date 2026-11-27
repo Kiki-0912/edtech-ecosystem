@@ -4,13 +4,8 @@ import 'package:material_ui/material_ui.dart';
 const String kFontFamily = 'Inter';
 
 TextTheme _textTheme(AppColors c) {
-  TextStyle s(
-    double size,
-    FontWeight weight,
-    Color color, {
-    double height = 1.4,
-    double spacing = 0,
-  }) =>
+  TextStyle s(double size, FontWeight weight, Color color,
+          {double height = 1.4, double spacing = 0}) =>
       TextStyle(
         fontFamily: kFontFamily,
         fontSize: size,
@@ -21,27 +16,12 @@ TextTheme _textTheme(AppColors c) {
       );
 
   return TextTheme(
-    displaySmall: s(
-      32,
-      FontWeight.w700,
-      c.textPrimary,
-      height: 1.2,
-      spacing: -0.5,
-    ),
-    headlineMedium: s(
-      26,
-      FontWeight.w700,
-      c.textPrimary,
-      height: 1.25,
-      spacing: -0.4,
-    ),
-    headlineSmall: s(
-      22,
-      FontWeight.w700,
-      c.textPrimary,
-      height: 1.3,
-      spacing: -0.3,
-    ),
+    displaySmall:
+        s(32, FontWeight.w700, c.textPrimary, height: 1.2, spacing: -0.5),
+    headlineMedium:
+        s(26, FontWeight.w700, c.textPrimary, height: 1.25, spacing: -0.4),
+    headlineSmall:
+        s(22, FontWeight.w700, c.textPrimary, height: 1.3, spacing: -0.3),
     titleLarge: s(18, FontWeight.w600, c.textPrimary, height: 1.35),
     titleMedium: s(16, FontWeight.w600, c.textPrimary),
     titleSmall: s(14, FontWeight.w600, c.textPrimary),
@@ -80,10 +60,8 @@ ThemeData buildTheme(Brightness brightness) {
   );
 
   const buttonShape = RoundedRectangleBorder(borderRadius: AppRadius.mdAll);
-  const buttonPadding = EdgeInsets.symmetric(
-    horizontal: AppSpacing.md,
-    vertical: AppSpacing.sm,
-  );
+  const buttonPadding =
+      EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm);
   const minButton = Size(64, 44);
 
   return ThemeData(
@@ -175,20 +153,15 @@ ThemeData buildTheme(Brightness brightness) {
       filled: true,
       fillColor: c.surface,
       contentPadding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       border: inputBorder,
       enabledBorder: inputBorder,
       focusedBorder: inputBorder.copyWith(
-        borderSide: BorderSide(color: c.accent, width: 1.5),
-      ),
-      errorBorder: inputBorder.copyWith(
-        borderSide: BorderSide(color: c.danger),
-      ),
+          borderSide: BorderSide(color: c.accent, width: 1.5)),
+      errorBorder:
+          inputBorder.copyWith(borderSide: BorderSide(color: c.danger)),
       focusedErrorBorder: inputBorder.copyWith(
-        borderSide: BorderSide(color: c.danger, width: 1.5),
-      ),
+          borderSide: BorderSide(color: c.danger, width: 1.5)),
       labelStyle: text.bodyMedium,
       hintStyle: text.bodyMedium?.copyWith(color: c.textMuted),
       prefixIconColor: c.textMuted,
@@ -219,32 +192,27 @@ ThemeData buildTheme(Brightness brightness) {
       elevation: 0,
       height: 68,
       labelTextStyle: WidgetStateProperty.resolveWith(
-        (states) => text.labelMedium?.copyWith(
-          color: states.contains(WidgetState.selected)
-              ? c.accentText
-              : c.textMuted,
-          fontWeight: states.contains(WidgetState.selected)
-              ? FontWeight.w600
-              : FontWeight.w500,
-        ),
-      ),
-      iconTheme: WidgetStateProperty.resolveWith(
-        (states) => IconThemeData(
-          color: states.contains(WidgetState.selected)
-              ? c.accentText
-              : c.textMuted,
-        ),
-      ),
+          (states) => text.labelMedium?.copyWith(
+                color: states.contains(WidgetState.selected)
+                    ? c.accentText
+                    : c.textMuted,
+                fontWeight: states.contains(WidgetState.selected)
+                    ? FontWeight.w600
+                    : FontWeight.w500,
+              )),
+      iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? c.accentText
+                : c.textMuted,
+          )),
     ),
     navigationRailTheme: NavigationRailThemeData(
       backgroundColor: c.surface,
       indicatorColor: c.accentSoft,
       selectedIconTheme: IconThemeData(color: c.accentText),
       unselectedIconTheme: IconThemeData(color: c.textMuted),
-      selectedLabelTextStyle: text.labelMedium?.copyWith(
-        color: c.accentText,
-        fontWeight: FontWeight.w600,
-      ),
+      selectedLabelTextStyle: text.labelMedium
+          ?.copyWith(color: c.accentText, fontWeight: FontWeight.w600),
       unselectedLabelTextStyle: text.labelMedium?.copyWith(color: c.textMuted),
     ),
     listTileTheme: ListTileThemeData(
@@ -304,11 +272,9 @@ ThemeData buildTheme(Brightness brightness) {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? c.onAccent : c.textMuted,
-      ),
+          (s) => s.contains(WidgetState.selected) ? c.onAccent : c.textMuted),
       trackColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? c.accent : c.surfaceMuted,
-      ),
+          (s) => s.contains(WidgetState.selected) ? c.accent : c.surfaceMuted),
     ),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(

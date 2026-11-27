@@ -122,20 +122,15 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       _error = null;
     });
     try {
-      final users = await ApiService.instance.adminListUsers(
-        role: _role,
-        query: _query,
-        status: _status,
-      );
+      final users = await ApiService.instance
+          .adminListUsers(role: _role, query: _query, status: _status);
       // A newer filter or search superseded this request.
       if (!mounted || request != _request) return;
       setState(() {
         _users = users
-          ..sort(
-            (a, b) => a.displayName.toLowerCase().compareTo(
-                  b.displayName.toLowerCase(),
-                ),
-          );
+          ..sort((a, b) => a.displayName
+              .toLowerCase()
+              .compareTo(b.displayName.toLowerCase()));
         _loading = false;
         _loaded = true;
       });
@@ -164,11 +159,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       builder: (_) => _UserForm(user: user, isSelf: isSelf),
     );
     if (saved != true || !mounted) return;
-    showToast(
-      context,
-      user == null ? 'User created' : 'User updated',
-      kind: ToastKind.success,
-    );
+    showToast(context, user == null ? 'User created' : 'User updated',
+        kind: ToastKind.success);
     // Your own name and email also appear in the sidebar and account menu.
     final auth = context.read<AuthProvider>();
     final token = auth.token;
@@ -198,11 +190,8 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
       }
       return;
     }
-    showToast(
-      context,
-      'Password updated for ${user.displayName}',
-      kind: ToastKind.success,
-    );
+    showToast(context, 'Password updated for ${user.displayName}',
+        kind: ToastKind.success);
   }
 
   Future<void> _setActive(AdminUser user, bool active) async {
@@ -236,9 +225,7 @@ class _AdminUsersScreenState extends State<AdminUsersScreen> {
     );
     if (!ok || !mounted) return;
     await _run(
-      () => ApiService.instance.adminDeleteUser(user.id),
-      'User deleted',
-    );
+        () => ApiService.instance.adminDeleteUser(user.id), 'User deleted');
   }
 
   Future<void> _run(Future<Object?> Function() action, String done) async {
@@ -355,16 +342,12 @@ class _UserRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final contact = [
-      user.email,
-      user.phone,
-    ].where((s) => s.isNotEmpty).join(' · ');
+    final contact =
+        [user.email, user.phone].where((s) => s.isNotEmpty).join(' · ');
     return Padding(
       key: Key('user-row-${user.id}'),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
+          horizontal: AppSpacing.md, vertical: AppSpacing.xs),
       child: Row(
         children: [
           Avatar(name: user.displayName),
@@ -373,19 +356,15 @@ class _UserRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  user.displayName,
-                  style: context.text.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (contact.isNotEmpty)
-                  Text(
-                    contact,
-                    style: context.text.bodySmall,
+                Text(user.displayName,
+                    style: context.text.titleSmall,
                     maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    overflow: TextOverflow.ellipsis),
+                if (contact.isNotEmpty)
+                  Text(contact,
+                      style: context.text.bodySmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
                 const SizedBox(height: AppSpacing.xxs),
                 Wrap(
                   spacing: AppSpacing.xs,
@@ -578,9 +557,7 @@ class _UserFormState extends State<_UserForm> {
         children: [
           if (_error != null) ...[
             FormErrorBanner(
-              key: const Key('user-form-error'),
-              message: _error!,
-            ),
+                key: const Key('user-form-error'), message: _error!),
             const SizedBox(height: AppSpacing.md),
           ],
           TextFormField(
@@ -698,10 +675,8 @@ class _PasswordFormState extends State<_PasswordForm> {
       _error = null;
     });
     try {
-      await ApiService.instance.adminResetPassword(
-        widget.user.id,
-        _password.text,
-      );
+      await ApiService.instance
+          .adminResetPassword(widget.user.id, _password.text);
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
@@ -733,9 +708,7 @@ class _PasswordFormState extends State<_PasswordForm> {
           const SizedBox(height: AppSpacing.md),
           if (_error != null) ...[
             FormErrorBanner(
-              key: const Key('password-form-error'),
-              message: _error!,
-            ),
+                key: const Key('password-form-error'), message: _error!),
             const SizedBox(height: AppSpacing.md),
           ],
           PasswordField(

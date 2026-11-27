@@ -19,20 +19,16 @@ import 'package:material_ui/material_ui.dart';
 const _loginPath = '/login';
 
 StatefulShellBranch _branch(
-  AdminDestination dest,
-  Widget Function(GoRouterState state) build, {
-  List<RouteBase> routes = const [],
-}) =>
-    StatefulShellBranch(
-      routes: [
-        GoRoute(
-          path: dest.path,
-          pageBuilder: (context, state) =>
-              NoTransitionPage(key: state.pageKey, child: build(state)),
-          routes: routes,
-        ),
-      ],
-    );
+        AdminDestination dest, Widget Function(GoRouterState state) build,
+        {List<RouteBase> routes = const []}) =>
+    StatefulShellBranch(routes: [
+      GoRoute(
+        path: dest.path,
+        pageBuilder: (context, state) =>
+            NoTransitionPage(key: state.pageKey, child: build(state)),
+        routes: routes,
+      ),
+    ]);
 
 /// Builds the admin console router. Every route except /login requires a
 /// signed-in admin; anything else is sent to /login. Re-evaluated whenever
@@ -48,7 +44,10 @@ GoRouter buildAdminRouter(AuthProvider auth) {
       return null;
     },
     routes: [
-      GoRoute(path: _loginPath, builder: (_, __) => const AdminLoginScreen()),
+      GoRoute(
+        path: _loginPath,
+        builder: (_, __) => const AdminLoginScreen(),
+      ),
       StatefulShellRoute.indexedStack(
         // IndexedStack keeps visited branches alive; disable heroes so their
         // widgets never collide on shell ⇄ login transitions.
@@ -59,30 +58,25 @@ GoRouter buildAdminRouter(AuthProvider auth) {
           _branch(adminOverview, (_) => const AdminOverviewScreen()),
           // `/users?role=student`, `/users?status=inactive`: starting filters.
           _branch(
-            adminUsers,
-            (state) => AdminUsersScreen(
-              initialRole: state.uri.queryParameters['role'],
-              initialStatus: state.uri.queryParameters['status'],
-            ),
-          ),
+              adminUsers,
+              (state) => AdminUsersScreen(
+                    initialRole: state.uri.queryParameters['role'],
+                    initialStatus: state.uri.queryParameters['status'],
+                  )),
           _branch(adminCourses, (_) => const AdminCoursesScreen()),
           // The shared screens below are reused as-is: they only need the
           // AuthProvider and a Scaffold, which the admin shell provides.
           _branch(adminDepartments, (_) => const DepartmentsScreen()),
           _branch(adminCalendar, (_) => const CalendarScreen()),
-          _branch(
-            adminAttendance,
-            (_) => const AttendanceScreen(),
-            routes: [
-              GoRoute(
-                path: 'mark',
-                builder: (_, state) => AttendanceMarkScreen(
-                  key: ValueKey(state.uri.queryParameters['course']),
-                  initialCourseId: state.uri.queryParameters['course'],
-                ),
+          _branch(adminAttendance, (_) => const AttendanceScreen(), routes: [
+            GoRoute(
+              path: 'mark',
+              builder: (_, state) => AttendanceMarkScreen(
+                key: ValueKey(state.uri.queryParameters['course']),
+                initialCourseId: state.uri.queryParameters['course'],
               ),
-            ],
-          ),
+            ),
+          ]),
           _branch(adminNotes, (_) => const NotesScreen()),
           _branch(adminImportExport, (_) => const AdminImportExportScreen()),
           _branch(adminIntegrity, (_) => const AdminIntegrityScreen()),

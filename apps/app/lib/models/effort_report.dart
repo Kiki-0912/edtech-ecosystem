@@ -1,5 +1,4 @@
 import 'package:edtech_app/formats.dart';
-
 import 'effort_score.dart';
 
 class IntegrityReport {
@@ -26,9 +25,8 @@ class IntegrityReport {
       submissionId: json['submissionId'] as String?,
       assignmentId: json['assignmentId'] as String,
       studentId: json['studentId'] as String,
-      effortScore: EffortScore.fromJson(
-        json['effortScore'] as Map<String, dynamic>,
-      ),
+      effortScore:
+          EffortScore.fromJson(json['effortScore'] as Map<String, dynamic>),
       flags: List<String>.from(json['flags'] as List<dynamic>),
       replayAvailable: json['replayAvailable'] as bool,
       generatedAt: parseServerTime(json['generatedAt']) ?? DateTime.now(),

@@ -37,9 +37,7 @@ class ProfileScreen extends StatelessWidget {
                       Text(user.displayName, style: context.text.titleLarge),
                       const SizedBox(height: AppSpacing.xxs),
                       StatusBadge(
-                        label: roleLabel(user.role),
-                        tone: Tone.accent,
-                      ),
+                          label: roleLabel(user.role), tone: Tone.accent),
                     ],
                   ),
                 ),
@@ -52,25 +50,21 @@ class ProfileScreen extends StatelessWidget {
             child: Column(
               children: [
                 _InfoRow(
-                  icon: Icons.phone_outlined,
-                  label: 'Phone',
-                  value: user.phone,
-                ),
+                    icon: Icons.phone_outlined,
+                    label: 'Phone',
+                    value: user.phone),
                 _InfoRow(
-                  icon: Icons.mail_outline_rounded,
-                  label: 'Email',
-                  value: user.email.isEmpty ? '—' : user.email,
-                ),
+                    icon: Icons.mail_outline_rounded,
+                    label: 'Email',
+                    value: user.email.isEmpty ? '—' : user.email),
                 _InfoRow(
-                  icon: Icons.menu_book_outlined,
-                  label: 'Courses',
-                  value: '${user.courseIds.length}',
-                ),
+                    icon: Icons.menu_book_outlined,
+                    label: 'Courses',
+                    value: '${user.courseIds.length}'),
                 _InfoRow(
-                  icon: Icons.event_outlined,
-                  label: 'Member since',
-                  value: shortDate(user.createdAt),
-                ),
+                    icon: Icons.event_outlined,
+                    label: 'Member since',
+                    value: shortDate(user.createdAt)),
               ],
             ),
           ),
@@ -82,20 +76,17 @@ class ProfileScreen extends StatelessWidget {
               key: const Key('theme-mode'),
               segments: const [
                 ButtonSegment(
-                  value: ThemeMode.system,
-                  icon: Icon(Icons.brightness_auto_outlined),
-                  label: Text('System'),
-                ),
+                    value: ThemeMode.system,
+                    icon: Icon(Icons.brightness_auto_outlined),
+                    label: Text('System')),
                 ButtonSegment(
-                  value: ThemeMode.light,
-                  icon: Icon(Icons.light_mode_outlined),
-                  label: Text('Light'),
-                ),
+                    value: ThemeMode.light,
+                    icon: Icon(Icons.light_mode_outlined),
+                    label: Text('Light')),
                 ButtonSegment(
-                  value: ThemeMode.dark,
-                  icon: Icon(Icons.dark_mode_outlined),
-                  label: Text('Dark'),
-                ),
+                    value: ThemeMode.dark,
+                    icon: Icon(Icons.dark_mode_outlined),
+                    label: Text('Dark')),
               ],
               selected: {theme.mode},
               onSelectionChanged: (s) => theme.setMode(s.first),
@@ -116,10 +107,9 @@ class ProfileScreen extends StatelessWidget {
                     : AppConfig.apiBaseUrl,
               ),
               _InfoRow(
-                icon: Icons.info_outline_rounded,
-                label: 'Version',
-                value: kAppVersion,
-              ),
+                  icon: Icons.info_outline_rounded,
+                  label: 'Version',
+                  value: kAppVersion),
             ],
           ),
         ),
@@ -142,11 +132,8 @@ class ProfileScreen extends StatelessWidget {
 }
 
 class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _InfoRow(
+      {required this.icon, required this.label, required this.value});
 
   final IconData icon;
   final String label;
@@ -161,16 +148,12 @@ class _InfoRow extends StatelessWidget {
           Icon(icon, size: 18, color: context.colors.textMuted),
           const SizedBox(width: AppSpacing.sm),
           SizedBox(
-            width: 120,
-            child: Text(label, style: context.text.bodyMedium),
-          ),
+              width: 120, child: Text(label, style: context.text.bodyMedium)),
           Expanded(
-            child: Text(
-              value,
-              style: context.text.titleSmall,
-              textAlign: TextAlign.end,
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(value,
+                style: context.text.titleSmall,
+                textAlign: TextAlign.end,
+                overflow: TextOverflow.ellipsis),
           ),
         ],
       ),

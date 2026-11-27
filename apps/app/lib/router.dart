@@ -22,11 +22,8 @@ import 'package:material_ui/material_ui.dart';
 
 const _authPaths = {'/login', '/signup', '/verify-sms'};
 
-GoRoute _tab(
-  d.AppDestination dest,
-  Widget Function() build, {
-  List<RouteBase> routes = const [],
-}) =>
+GoRoute _tab(d.AppDestination dest, Widget Function() build,
+        {List<RouteBase> routes = const []}) =>
     GoRoute(
       path: dest.path,
       pageBuilder: (context, state) =>
@@ -60,93 +57,78 @@ GoRouter buildRouter(AuthProvider auth) {
             HeroMode(enabled: false, child: AppShell(navigationShell: shell)),
         // Order must match d.kDestinations.
         branches: [
-          StatefulShellBranch(routes: [_tab(d.home, () => const HomeScreen())]),
-          StatefulShellBranch(
-            routes: [
-              _tab(
-                d.courses,
-                () => const CoursesScreen(),
+          StatefulShellBranch(routes: [
+            _tab(d.home, () => const HomeScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            _tab(d.courses, () => const CoursesScreen(), routes: [
+              GoRoute(
+                path: ':courseId',
+                builder: (_, state) => CourseDetailScreen(
+                  key: ValueKey(state.pathParameters['courseId']),
+                  courseId: state.pathParameters['courseId']!,
+                ),
                 routes: [
                   GoRoute(
-                    path: ':courseId',
-                    builder: (_, state) => CourseDetailScreen(
-                      key: ValueKey(state.pathParameters['courseId']),
+                    path: 'assignments/:assignmentId',
+                    builder: (_, state) => AssignmentScreen(
+                      key: ValueKey(state.pathParameters['assignmentId']),
                       courseId: state.pathParameters['courseId']!,
-                    ),
-                    routes: [
-                      GoRoute(
-                        path: 'assignments/:assignmentId',
-                        builder: (_, state) => AssignmentScreen(
-                          key: ValueKey(state.pathParameters['assignmentId']),
-                          courseId: state.pathParameters['courseId']!,
-                          assignmentId: state.pathParameters['assignmentId']!,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [_tab(d.calendar, () => const CalendarScreen())],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: d.chat.path,
-                pageBuilder: (context, state) => NoTransitionPage(
-                  key: state.pageKey,
-                  child: ChatScreen(
-                    initialCourseId: state.uri.queryParameters['course'],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              GoRoute(
-                path: d.integrity.path,
-                pageBuilder: (context, state) => NoTransitionPage(
-                  key: state.pageKey,
-                  child: IntegrityScreen(
-                    assignmentId: state.uri.queryParameters['assignment'],
-                    studentId: state.uri.queryParameters['student'],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
-              _tab(
-                d.attendance,
-                () => const AttendanceScreen(),
-                routes: [
-                  GoRoute(
-                    path: 'mark',
-                    builder: (_, state) => AttendanceMarkScreen(
-                      key: ValueKey(state.uri.queryParameters['course']),
-                      initialCourseId: state.uri.queryParameters['course'],
+                      assignmentId: state.pathParameters['assignmentId']!,
                     ),
                   ),
                 ],
               ),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [_tab(d.students, () => const StudentsScreen())],
-          ),
-          StatefulShellBranch(
-            routes: [_tab(d.departments, () => const DepartmentsScreen())],
-          ),
-          StatefulShellBranch(
-            routes: [_tab(d.notes, () => const NotesScreen())],
-          ),
-          StatefulShellBranch(
-            routes: [_tab(d.profile, () => const ProfileScreen())],
-          ),
+            ]),
+          ]),
+          StatefulShellBranch(routes: [
+            _tab(d.calendar, () => const CalendarScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: d.chat.path,
+              pageBuilder: (context, state) => NoTransitionPage(
+                key: state.pageKey,
+                child: ChatScreen(
+                    initialCourseId: state.uri.queryParameters['course']),
+              ),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            GoRoute(
+              path: d.integrity.path,
+              pageBuilder: (context, state) => NoTransitionPage(
+                key: state.pageKey,
+                child: IntegrityScreen(
+                  assignmentId: state.uri.queryParameters['assignment'],
+                  studentId: state.uri.queryParameters['student'],
+                ),
+              ),
+            ),
+          ]),
+          StatefulShellBranch(routes: [
+            _tab(d.attendance, () => const AttendanceScreen(), routes: [
+              GoRoute(
+                path: 'mark',
+                builder: (_, state) => AttendanceMarkScreen(
+                  key: ValueKey(state.uri.queryParameters['course']),
+                  initialCourseId: state.uri.queryParameters['course'],
+                ),
+              ),
+            ]),
+          ]),
+          StatefulShellBranch(routes: [
+            _tab(d.students, () => const StudentsScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            _tab(d.departments, () => const DepartmentsScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            _tab(d.notes, () => const NotesScreen()),
+          ]),
+          StatefulShellBranch(routes: [
+            _tab(d.profile, () => const ProfileScreen()),
+          ]),
         ],
       ),
     ],

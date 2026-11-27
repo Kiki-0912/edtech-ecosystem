@@ -45,11 +45,8 @@ class _SignupScreenState extends State<SignupScreen> {
       showToast(context, 'Account created', kind: ToastKind.success);
       // The router's auth refresh moves us to "/".
     } else {
-      showToast(
-        context,
-        friendlyError(auth.error ?? 'Sign up failed'),
-        kind: ToastKind.error,
-      );
+      showToast(context, friendlyError(auth.error ?? 'Sign up failed'),
+          kind: ToastKind.error);
     }
   }
 

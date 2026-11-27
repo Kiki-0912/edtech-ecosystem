@@ -44,9 +44,7 @@ class AuthLayout extends StatelessWidget {
                 icon: const Icon(Icons.arrow_back_rounded, size: 18),
                 label: const Text('Back'),
                 style: TextButton.styleFrom(
-                  foregroundColor: c.textSecondary,
-                  padding: EdgeInsets.zero,
-                ),
+                    foregroundColor: c.textSecondary, padding: EdgeInsets.zero),
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -67,9 +65,7 @@ class AuthLayout extends StatelessWidget {
     final formPane = Center(
       child: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.xl,
-        ),
+            horizontal: AppSpacing.lg, vertical: AppSpacing.xl),
         child: form,
       ),
     );
@@ -108,10 +104,8 @@ class _BrandPanel extends StatelessWidget {
         children: [
           const BrandMark(),
           const Spacer(),
-          Text(
-            'Your classroom,\nall in one place.',
-            style: context.text.displaySmall,
-          ),
+          Text('Your classroom,\nall in one place.',
+              style: context.text.displaySmall),
           const SizedBox(height: AppSpacing.md),
           Text(
             'Courses, attendance, schedules, chat and process-based integrity '
@@ -120,17 +114,14 @@ class _BrandPanel extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           const _Feature(
-            icon: Icons.fact_check_outlined,
-            text: 'Mark and review attendance in seconds',
-          ),
+              icon: Icons.fact_check_outlined,
+              text: 'Mark and review attendance in seconds'),
           const _Feature(
-            icon: Icons.calendar_month_outlined,
-            text: 'Classes, quizzes and deadlines on one calendar',
-          ),
+              icon: Icons.calendar_month_outlined,
+              text: 'Classes, quizzes and deadlines on one calendar'),
           const _Feature(
-            icon: Icons.verified_user_outlined,
-            text: 'Effort insights that respect student privacy',
-          ),
+              icon: Icons.verified_user_outlined,
+              text: 'Effort insights that respect student privacy'),
           const Spacer(),
         ],
       ),
@@ -203,11 +194,9 @@ class _PasswordFieldState extends State<PasswordField> {
         prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
         suffixIcon: IconButton(
           tooltip: _obscure ? 'Show password' : 'Hide password',
-          icon: Icon(
-            _obscure
-                ? Icons.visibility_outlined
-                : Icons.visibility_off_outlined,
-          ),
+          icon: Icon(_obscure
+              ? Icons.visibility_outlined
+              : Icons.visibility_off_outlined),
           onPressed: () => setState(() => _obscure = !_obscure),
         ),
       ),

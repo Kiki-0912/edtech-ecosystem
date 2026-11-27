@@ -44,10 +44,8 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _courseId = widget.initialCourseId;
     _load();
-    _poll = Timer.periodic(
-      const Duration(seconds: 15),
-      (_) => _refreshMessages(),
-    );
+    _poll =
+        Timer.periodic(const Duration(seconds: 15), (_) => _refreshMessages());
   }
 
   @override
@@ -207,11 +205,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _composer.clear();
     _scrollToEnd();
     try {
-      final saved = await ApiService.instance.postMessage(
-        channelId: channelId,
-        authorId: user.id,
-        body: text,
-      );
+      final saved = await ApiService.instance
+          .postMessage(channelId: channelId, authorId: user.id, body: text);
       if (!mounted) return;
       setState(() {
         _messages = [
@@ -224,11 +219,8 @@ class _ChatScreenState extends State<ChatScreen> {
         _messages = _messages.where((m) => m.id != optimistic.id).toList();
       });
       _composer.text = text;
-      showToast(
-        context,
-        'Message not sent: ${friendlyError(e)}',
-        kind: ToastKind.error,
-      );
+      showToast(context, 'Message not sent: ${friendlyError(e)}',
+          kind: ToastKind.error);
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -273,10 +265,8 @@ class _ChatScreenState extends State<ChatScreen> {
         for (final course in _courses)
           DropdownMenuItem(
             value: course.id,
-            child: Text(
-              '${course.code} · ${course.title}',
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text('${course.code} · ${course.title}',
+                overflow: TextOverflow.ellipsis),
           ),
       ],
       onChanged: (v) {
@@ -337,11 +327,7 @@ class _ChatScreenState extends State<ChatScreen> {
           Container(
             color: c.surface,
             padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
-              AppSpacing.sm,
-              AppSpacing.md,
-              AppSpacing.xs,
-            ),
+                AppSpacing.md, AppSpacing.sm, AppSpacing.md, AppSpacing.xs),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -351,9 +337,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   options: [
                     for (final ch in _channels)
                       FilterOption(
-                        ch.id,
-                        ch.isAnnouncement ? ch.name : '# ${ch.name}',
-                      ),
+                          ch.id, ch.isAnnouncement ? ch.name : '# ${ch.name}'),
                   ],
                   selected: _channelId,
                   onSelected: (id) {
@@ -394,9 +378,7 @@ class _ChannelTile extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
-          ),
+              horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
           child: Row(
             children: [
               Icon(
@@ -408,12 +390,9 @@ class _ChannelTile extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
-                child: Text(
-                  channel.name,
-                  style: context.text.labelLarge?.copyWith(
-                    color: selected ? c.accentText : c.textSecondary,
-                  ),
-                ),
+                child: Text(channel.name,
+                    style: context.text.labelLarge?.copyWith(
+                        color: selected ? c.accentText : c.textSecondary)),
               ),
               if (channel.isAnnouncement)
                 const StatusBadge(label: 'Staff only', tone: Tone.info),
@@ -523,26 +502,21 @@ class _Conversation extends StatelessWidget {
             width: double.infinity,
             color: c.surface,
             padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.sm,
-            ),
+                horizontal: AppSpacing.md, vertical: AppSpacing.sm),
             child: Row(
               children: [
                 Icon(
-                  channel!.isAnnouncement
-                      ? Icons.campaign_outlined
-                      : Icons.tag_rounded,
-                  size: 20,
-                  color: c.textMuted,
-                ),
+                    channel!.isAnnouncement
+                        ? Icons.campaign_outlined
+                        : Icons.tag_rounded,
+                    size: 20,
+                    color: c.textMuted),
                 const SizedBox(width: AppSpacing.xs),
                 Expanded(
-                  child: Text(channel!.name, style: context.text.titleMedium),
-                ),
-                Text(
-                  '${channel!.memberIds.length} members',
-                  style: context.text.bodySmall,
-                ),
+                    child:
+                        Text(channel!.name, style: context.text.titleMedium)),
+                Text('${channel!.memberIds.length} members',
+                    style: context.text.bodySmall),
               ],
             ),
           ),
@@ -586,17 +560,13 @@ class _Conversation extends StatelessWidget {
                     padding: const EdgeInsets.all(AppSpacing.xs),
                     child: Row(
                       children: [
-                        Icon(
-                          Icons.lock_outline_rounded,
-                          size: 18,
-                          color: c.textMuted,
-                        ),
+                        Icon(Icons.lock_outline_rounded,
+                            size: 18, color: c.textMuted),
                         const SizedBox(width: AppSpacing.xs),
                         Expanded(
                           child: Text(
-                            'Only teachers and admins can post announcements.',
-                            style: context.text.bodySmall,
-                          ),
+                              'Only teachers and admins can post announcements.',
+                              style: context.text.bodySmall),
                         ),
                       ],
                     ),
@@ -659,9 +629,7 @@ class _Bubble extends StatelessWidget {
       constraints: const BoxConstraints(maxWidth: 520),
       child: Container(
         padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.sm,
-          vertical: AppSpacing.xs,
-        ),
+            horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
         decoration: BoxDecoration(
           color: own ? c.accent : c.surface,
           border: own ? null : Border.all(color: c.border),
@@ -675,18 +643,14 @@ class _Bubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              message.body,
-              style: context.text.bodyMedium?.copyWith(
-                color: own ? c.onAccent : c.textPrimary,
-              ),
-            ),
+            Text(message.body,
+                style: context.text.bodyMedium
+                    ?.copyWith(color: own ? c.onAccent : c.textPrimary)),
             const SizedBox(height: 2),
             Text(
               pending ? 'Sending…' : clockTime(message.sentAt),
               style: context.text.bodySmall?.copyWith(
-                color: own ? c.onAccent.withValues(alpha: 0.7) : c.textMuted,
-              ),
+                  color: own ? c.onAccent.withValues(alpha: 0.7) : c.textMuted),
             ),
           ],
         ),
@@ -712,10 +676,8 @@ class _Bubble extends StatelessWidget {
               children: [
                 if (showAuthor && !own)
                   Padding(
-                    padding: const EdgeInsets.only(
-                      left: AppSpacing.xxs,
-                      bottom: 2,
-                    ),
+                    padding:
+                        const EdgeInsets.only(left: AppSpacing.xxs, bottom: 2),
                     child: Text(author, style: context.text.labelMedium),
                   ),
                 bubble,

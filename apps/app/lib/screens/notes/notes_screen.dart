@@ -42,10 +42,8 @@ class _NotesScreenState extends State<NotesScreen> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        api.getTeacherNotes(),
-        api.getCourses(),
-      ]);
+      final results =
+          await Future.wait([api.getTeacherNotes(), api.getCourses()]);
       final courses = myCourses(user, results[1] as List<Course>);
       final ids = courses.map((c) => c.id).toSet();
       final notes = (results[0] as List<TeacherNote>)
@@ -72,12 +70,8 @@ class _NotesScreenState extends State<NotesScreen> {
     return _notes.where((n) {
       if (_courseFilter != null && n.courseId != _courseFilter) return false;
       if (q.isEmpty) return true;
-      return [
-        n.title,
-        n.bookName,
-        n.courseCode,
-        n.content,
-      ].any((v) => v.toLowerCase().contains(q));
+      return [n.title, n.bookName, n.courseCode, n.content]
+          .any((v) => v.toLowerCase().contains(q));
     }).toList();
   }
 
@@ -96,11 +90,8 @@ class _NotesScreenState extends State<NotesScreen> {
     );
     if (saved == true) {
       if (mounted) {
-        showToast(
-          context,
-          note == null ? 'Note saved' : 'Note updated',
-          kind: ToastKind.success,
-        );
+        showToast(context, note == null ? 'Note saved' : 'Note updated',
+            kind: ToastKind.success);
       }
       await _load();
     }
@@ -140,28 +131,24 @@ class _NotesScreenState extends State<NotesScreen> {
               StatusBadge(label: note.courseCode, tone: Tone.accent),
               if (note.bookName.isNotEmpty)
                 StatusBadge(
-                  label: note.bookName,
-                  tone: Tone.info,
-                  icon: Icons.menu_book_outlined,
-                ),
+                    label: note.bookName,
+                    tone: Tone.info,
+                    icon: Icons.menu_book_outlined),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
           SelectableText(note.content, style: ctx.text.bodyLarge),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            'Updated ${_dateLabel(note.updatedAt)}',
-            style: ctx.text.bodySmall,
-          ),
+          Text('Updated ${_dateLabel(note.updatedAt)}',
+              style: ctx.text.bodySmall),
           if (manage) ...[
             const SizedBox(height: AppSpacing.lg),
             Row(
               children: [
                 TextButton.icon(
                   key: const Key('note-delete'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: ctx.colors.danger,
-                  ),
+                  style:
+                      TextButton.styleFrom(foregroundColor: ctx.colors.danger),
                   onPressed: () {
                     Navigator.of(ctx).pop();
                     _delete(note);
@@ -206,9 +193,8 @@ class _NotesScreenState extends State<NotesScreen> {
             onPressed: () => showCsvExport(
               context,
               title: 'Export notes',
-              load: () => ApiService.instance.exportNotesToExcel(
-                courseId: _courseFilter,
-              ),
+              load: () => ApiService.instance
+                  .exportNotesToExcel(courseId: _courseFilter),
             ),
             icon: const Icon(Icons.download_rounded, size: 18),
             label: const Text('Export'),
@@ -268,46 +254,35 @@ class _NotesScreenState extends State<NotesScreen> {
                         children: [
                           StatusBadge(label: n.courseCode, tone: Tone.accent),
                           const Spacer(),
-                          Text(
-                            _dateLabel(n.updatedAt),
-                            style: context.text.bodySmall,
-                          ),
+                          Text(_dateLabel(n.updatedAt),
+                              style: context.text.bodySmall),
                         ],
                       ),
                       const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        n.title,
-                        style: context.text.titleMedium,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text(n.title,
+                          style: context.text.titleMedium,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis),
                       if (n.bookName.isNotEmpty) ...[
                         const SizedBox(height: AppSpacing.xxs),
                         Row(
                           children: [
-                            Icon(
-                              Icons.menu_book_outlined,
-                              size: 14,
-                              color: context.colors.textMuted,
-                            ),
+                            Icon(Icons.menu_book_outlined,
+                                size: 14, color: context.colors.textMuted),
                             const SizedBox(width: AppSpacing.xxs),
                             Expanded(
-                              child: Text(
-                                n.bookName,
-                                style: context.text.bodySmall,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: Text(n.bookName,
+                                  style: context.text.bodySmall,
+                                  overflow: TextOverflow.ellipsis),
                             ),
                           ],
                         ),
                       ],
                       const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        n.content,
-                        style: context.text.bodyMedium,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      Text(n.content,
+                          style: context.text.bodyMedium,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis),
                     ],
                   ),
                 ),
@@ -416,12 +391,9 @@ class _NoteFormState extends State<_NoteForm> {
             items: [
               for (final c in widget.courses)
                 DropdownMenuItem(
-                  value: c.id,
-                  child: Text(
-                    '${c.code} · ${c.title}',
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+                    value: c.id,
+                    child: Text('${c.code} · ${c.title}',
+                        overflow: TextOverflow.ellipsis)),
             ],
             // Editing can't move a note between courses (the API has no field).
             onChanged: widget.note != null

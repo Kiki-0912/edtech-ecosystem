@@ -36,20 +36,16 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        api.adminListCourses(),
-        api.adminListUsers(),
-      ]);
+      final results =
+          await Future.wait([api.adminListCourses(), api.adminListUsers()]);
       if (!mounted) return;
       setState(() {
         _courses = (results[0] as List<AdminCourse>)
           ..sort((a, b) => a.code.compareTo(b.code));
         _users = (results[1] as List<AdminUser>)
-          ..sort(
-            (a, b) => a.displayName.toLowerCase().compareTo(
-                  b.displayName.toLowerCase(),
-                ),
-          );
+          ..sort((a, b) => a.displayName
+              .toLowerCase()
+              .compareTo(b.displayName.toLowerCase()));
         _loading = false;
         _loaded = true;
       });
@@ -66,14 +62,8 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
     final q = _query.trim().toLowerCase();
     if (q.isEmpty) return _courses;
     return _courses
-        .where(
-          (c) => [
-            c.code,
-            c.title,
-            c.term,
-            c.teacherName,
-          ].any((v) => v.toLowerCase().contains(q)),
-        )
+        .where((c) => [c.code, c.title, c.term, c.teacherName]
+            .any((v) => v.toLowerCase().contains(q)))
         .toList();
   }
 
@@ -84,11 +74,8 @@ class _AdminCoursesScreenState extends State<AdminCoursesScreen> {
       builder: (_) => _CourseForm(course: course, teachers: _teachers),
     );
     if (saved != true || !mounted) return;
-    showToast(
-      context,
-      course == null ? 'Course created' : 'Course updated',
-      kind: ToastKind.success,
-    );
+    showToast(context, course == null ? 'Course created' : 'Course updated',
+        kind: ToastKind.success);
     await _load();
   }
 
@@ -202,9 +189,7 @@ class _CourseRow extends StatelessWidget {
     return Padding(
       key: Key('course-row-${course.id}'),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
+          horizontal: AppSpacing.md, vertical: AppSpacing.xs),
       child: Row(
         children: [
           const IconBadge(icon: Icons.menu_book_outlined, tone: Tone.info),
@@ -213,18 +198,17 @@ class _CourseRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text('${course.code} · ${course.title}',
+                    style: context.text.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
                 Text(
-                  '${course.code} · ${course.title}',
-                  style: context.text.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  [course.term, teacher].where((s) => s.isNotEmpty).join(' · '),
-                  style: context.text.bodySmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                    [course.term, teacher]
+                        .where((s) => s.isNotEmpty)
+                        .join(' · '),
+                    style: context.text.bodySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
                 const SizedBox(height: AppSpacing.xxs),
                 Wrap(
                   spacing: AppSpacing.xs,
@@ -375,9 +359,7 @@ class _CourseFormState extends State<_CourseForm> {
         children: [
           if (_error != null) ...[
             FormErrorBanner(
-              key: const Key('course-form-error'),
-              message: _error!,
-            ),
+                key: const Key('course-form-error'), message: _error!),
             const SizedBox(height: AppSpacing.md),
           ],
           TextFormField(
@@ -393,9 +375,7 @@ class _CourseFormState extends State<_CourseForm> {
             controller: _code,
             textCapitalization: TextCapitalization.characters,
             decoration: const InputDecoration(
-              labelText: 'Code',
-              hintText: 'e.g. CS 301',
-            ),
+                labelText: 'Code', hintText: 'e.g. CS 301'),
             validator: (v) => notEmpty(v, 'Enter a course code'),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -403,9 +383,7 @@ class _CourseFormState extends State<_CourseForm> {
             key: const Key('course-term'),
             controller: _term,
             decoration: const InputDecoration(
-              labelText: 'Term',
-              hintText: 'e.g. Fall 2026',
-            ),
+                labelText: 'Term', hintText: 'e.g. Fall 2026'),
             validator: (v) => notEmpty(v, 'Enter a term'),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -495,15 +473,10 @@ class _RosterFormState extends State<_RosterForm> {
   Widget build(BuildContext context) {
     final q = _query.trim().toLowerCase();
     final shown = widget.students
-        .where(
-          (s) =>
-              q.isEmpty ||
-              [
-                s.displayName,
-                s.email,
-                s.phone,
-              ].any((v) => v.toLowerCase().contains(q)),
-        )
+        .where((s) =>
+            q.isEmpty ||
+            [s.displayName, s.email, s.phone]
+                .any((v) => v.toLowerCase().contains(q)))
         .toList();
     final count = widget.students.where((s) => _selected.contains(s.id)).length;
 
@@ -522,11 +495,8 @@ class _RosterFormState extends State<_RosterForm> {
           onChanged: (v) => setState(() => _query = v),
         ),
         const SizedBox(height: AppSpacing.xs),
-        Text(
-          '$count selected',
-          key: const Key('roster-count'),
-          style: context.text.labelMedium,
-        ),
+        Text('$count selected',
+            key: const Key('roster-count'), style: context.text.labelMedium),
         const SizedBox(height: AppSpacing.xs),
         if (widget.students.isEmpty)
           const EmptyState(

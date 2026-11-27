@@ -34,9 +34,8 @@ class _AdminIntegrityScreenState extends State<AdminIntegrityScreen> {
       _error = null;
     });
     try {
-      final rows = await ApiService.instance.adminIntegrity(
-        flaggedOnly: _flaggedOnly,
-      );
+      final rows =
+          await ApiService.instance.adminIntegrity(flaggedOnly: _flaggedOnly);
       if (!mounted || request != _request) return;
       setState(() {
         _rows = rows..sort((a, b) => b.computedAt.compareTo(a.computedAt));
@@ -123,9 +122,7 @@ class _IntegrityRowTile extends StatelessWidget {
     return Padding(
       key: Key('integrity-row-${row.studentId}-${row.assignmentId}'),
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.xs,
-      ),
+          horizontal: AppSpacing.md, vertical: AppSpacing.xs),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -133,10 +130,8 @@ class _IntegrityRowTile extends StatelessWidget {
             width: 48,
             height: 48,
             alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: c.bg(tone),
-              borderRadius: AppRadius.mdAll,
-            ),
+            decoration:
+                BoxDecoration(color: c.bg(tone), borderRadius: AppRadius.mdAll),
             child: Text(
               row.score.round().toString(),
               style: context.text.titleMedium?.copyWith(color: c.fg(tone)),
@@ -147,17 +142,14 @@ class _IntegrityRowTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(row.studentName,
+                    style: context.text.titleSmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
                 Text(
-                  row.studentName,
-                  style: context.text.titleSmall,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
-                  [
-                    row.assignmentTitle,
-                    row.courseTitle,
-                  ].where((s) => s.isNotEmpty).join(' · '),
+                  [row.assignmentTitle, row.courseTitle]
+                      .where((s) => s.isNotEmpty)
+                      .join(' · '),
                   style: context.text.bodySmall,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -181,10 +173,8 @@ class _IntegrityRowTile extends StatelessWidget {
                         tone: Tone.success,
                         icon: Icons.verified_rounded,
                       ),
-                    Text(
-                      '${shortDate(when)} · ${clockTime(when)}',
-                      style: context.text.bodySmall,
-                    ),
+                    Text('${shortDate(when)} · ${clockTime(when)}',
+                        style: context.text.bodySmall),
                   ],
                 ),
               ],

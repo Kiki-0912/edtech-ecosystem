@@ -42,11 +42,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
     // On success the router's auth refresh navigates to "/".
     if (!ok) {
-      showToast(
-        context,
-        friendlyError(auth.error ?? 'Sign in failed'),
-        kind: ToastKind.error,
-      );
+      showToast(context, friendlyError(auth.error ?? 'Sign in failed'),
+          kind: ToastKind.error);
     }
   }
 

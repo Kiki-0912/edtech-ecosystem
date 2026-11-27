@@ -263,8 +263,7 @@ class AdminOverview {
 
   factory AdminOverview.fromJson(Map<String, dynamic> json) => AdminOverview(
         counts: AdminCounts.fromJson(
-          json['counts'] as Map<String, dynamic>? ?? const {},
-        ),
+            json['counts'] as Map<String, dynamic>? ?? const {}),
         storage: json['storage'] as String? ?? 'memory',
         database: json['database'] as String? ?? 'unreachable',
         schemaVersion: (json['schemaVersion'] as num?)?.toInt(),

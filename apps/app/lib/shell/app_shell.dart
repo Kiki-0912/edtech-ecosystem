@@ -90,7 +90,11 @@ class AppShell extends StatelessWidget {
                 ),
             ],
           )
-        : _Sidebar(nav: nav, current: current, onSelect: _go);
+        : _Sidebar(
+            nav: nav,
+            current: current,
+            onSelect: _go,
+          );
 
     return Scaffold(
       body: Row(
@@ -105,21 +109,14 @@ class AppShell extends StatelessWidget {
     );
   }
 
-  void _showMoreSheet(
-    BuildContext context,
-    List<AppDestination> items,
-    AppDestination current,
-  ) {
+  void _showMoreSheet(BuildContext context, List<AppDestination> items,
+      AppDestination current) {
     showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            0,
-            AppSpacing.md,
-            AppSpacing.md,
-          ),
+              AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -176,16 +173,11 @@ class _Sidebar extends StatelessWidget {
             onTap: () => onSelect(d),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.sm,
-              ),
+                  horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
               child: Row(
                 children: [
-                  Icon(
-                    selected ? d.selectedIcon : d.icon,
-                    size: 20,
-                    color: selected ? c.accentText : c.textMuted,
-                  ),
+                  Icon(selected ? d.selectedIcon : d.icon,
+                      size: 20, color: selected ? c.accentText : c.textMuted),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
                     d.label,
@@ -212,11 +204,7 @@ class _Sidebar extends StatelessWidget {
           children: [
             const Padding(
               padding: EdgeInsets.fromLTRB(
-                AppSpacing.xs,
-                AppSpacing.xs,
-                0,
-                AppSpacing.lg,
-              ),
+                  AppSpacing.xs, AppSpacing.xs, 0, AppSpacing.lg),
               child: Align(alignment: Alignment.centerLeft, child: BrandMark()),
             ),
             Expanded(
@@ -225,11 +213,7 @@ class _Sidebar extends StatelessWidget {
                   for (final d in nav.primary) item(d),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.sm,
-                      AppSpacing.md,
-                      0,
-                      AppSpacing.xs,
-                    ),
+                        AppSpacing.sm, AppSpacing.md, 0, AppSpacing.xs),
                     child: Text('MORE', style: context.text.labelSmall),
                   ),
                   for (final d in nav.more) item(d),
@@ -329,9 +313,8 @@ class _TopBar extends StatelessWidget implements PreferredSizeWidget {
             const PopupMenuItem(
               value: 'profile',
               child: _MenuRow(
-                icon: Icons.person_outline_rounded,
-                label: 'Profile & settings',
-              ),
+                  icon: Icons.person_outline_rounded,
+                  label: 'Profile & settings'),
             ),
             PopupMenuItem(
               value: isDark ? 'light' : 'dark',
@@ -421,11 +404,8 @@ class _UpcomingSheetState extends State<_UpcomingSheet> {
                 }
                 final now = DateTime.now();
                 final events = (snap.data ?? const <CalendarEvent>[])
-                    .where(
-                      (e) => !e.startsAt.isBefore(
-                        DateTime(now.year, now.month, now.day),
-                      ),
-                    )
+                    .where((e) => !e.startsAt
+                        .isBefore(DateTime(now.year, now.month, now.day)))
                     .toList()
                   ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
                 if (events.isEmpty) {
@@ -442,10 +422,9 @@ class _UpcomingSheetState extends State<_UpcomingSheet> {
                     final e = events[i];
                     return ListRow(
                       leading: IconBadge(
-                        icon: eventIcon(e.kind),
-                        tone: eventTone(e.kind),
-                        size: 36,
-                      ),
+                          icon: eventIcon(e.kind),
+                          tone: eventTone(e.kind),
+                          size: 36),
                       title: e.title,
                       subtitle: isSameDay(e.startsAt, now)
                           ? 'Today · ${clockTime(e.startsAt)}'

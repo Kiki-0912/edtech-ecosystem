@@ -49,11 +49,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     try {
       final all = await ApiService.instance.getCourses();
       if (!mounted) return;
-      setState(
-        () => _courses = user.isAdmin
-            ? all
-            : all.where((c) => c.teacherId == user.id).toList(),
-      );
+      setState(() => _courses = user.isAdmin
+          ? all
+          : all.where((c) => c.teacherId == user.id).toList());
     } catch (_) {
       // Admins can still add campus-wide events; teachers see the error.
     }
@@ -75,10 +73,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
       _error = null;
     });
     try {
-      final events = await ApiService.instance.getCalendar(
-        user?.id,
-        departmentId: _departmentId,
-      );
+      final events = await ApiService.instance
+          .getCalendar(user?.id, departmentId: _departmentId);
       if (!mounted) return;
       setState(() {
         _events = events..sort((a, b) => a.startsAt.compareTo(b.startsAt));
@@ -163,10 +159,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       }
       setState(() {
         _selected = DateTime(
-          draft.startsAt.year,
-          draft.startsAt.month,
-          draft.startsAt.day,
-        );
+            draft.startsAt.year, draft.startsAt.month, draft.startsAt.day);
         _month = DateTime(draft.startsAt.year, draft.startsAt.month);
       });
       await _load();
@@ -217,16 +210,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  '${kMonthLong[_month.month - 1]} ${_month.year}',
-                  style: context.text.titleLarge,
-                ),
+                child: Text('${kMonthLong[_month.month - 1]} ${_month.year}',
+                    style: context.text.titleLarge),
               ),
               TextButton(
-                key: const Key('calendar-today'),
-                onPressed: _goToday,
-                child: const Text('Today'),
-              ),
+                  key: const Key('calendar-today'),
+                  onPressed: _goToday,
+                  child: const Text('Today')),
               IconButton(
                 key: const Key('calendar-prev'),
                 tooltip: 'Previous month',
@@ -271,8 +261,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ? OutlinedButton.icon(
                       onPressed: () => _openEditor(),
                       icon: const Icon(Icons.add_rounded, size: 18),
-                      label: const Text('Add event'),
-                    )
+                      label: const Text('Add event'))
                   : null,
             )
           : Column(
@@ -281,23 +270,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   ListRow(
                     key: Key('event-${e.id}'),
                     leading: IconBadge(
-                      icon: eventIcon(e.kind),
-                      tone: eventTone(e.kind),
-                      size: 36,
-                    ),
+                        icon: eventIcon(e.kind),
+                        tone: eventTone(e.kind),
+                        size: 36),
                     title: e.title,
                     subtitle: '${clockTime(e.startsAt)}'
                         '${e.endsAt != null ? ' – ${clockTime(e.endsAt!)}' : ''}',
                     trailing: canEdit
-                        ? Icon(
-                            Icons.edit_outlined,
-                            size: 18,
-                            color: context.colors.textMuted,
-                          )
+                        ? Icon(Icons.edit_outlined,
+                            size: 18, color: context.colors.textMuted)
                         : StatusBadge(
-                            label: kindLabel(e.kind),
-                            tone: eventTone(e.kind),
-                          ),
+                            label: kindLabel(e.kind), tone: eventTone(e.kind)),
                     onTap: () => canEdit ? _openEditor(e) : _showDetails(e),
                   ),
               ],
@@ -323,10 +306,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
             options: [
               const FilterOption(null, 'All departments'),
               for (final d in _departments)
-                FilterOption(
-                  d['id']?.toString(),
-                  d['code']?.toString() ?? d['name']?.toString() ?? '',
-                ),
+                FilterOption(d['id']?.toString(),
+                    d['code']?.toString() ?? d['name']?.toString() ?? ''),
             ],
             selected: _departmentId,
             onSelected: (id) {
@@ -340,8 +321,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
           onRetry: _load,
           isEmpty: false,
           skeleton: const SkeletonList(count: 2, itemHeight: 220),
-          builder: (_) =>
-              TwoPane(breakpoint: 960, primary: grid, secondary: agenda),
+          builder: (_) => TwoPane(
+            breakpoint: 960,
+            primary: grid,
+            secondary: agenda,
+          ),
         ),
       ],
     );
@@ -391,10 +375,8 @@ class _MonthGrid extends StatelessWidget {
             for (final d in kWeekdayShort)
               Expanded(
                 child: Center(
-                  child: Text(
-                    d.substring(0, 2),
-                    style: context.text.labelSmall,
-                  ),
+                  child:
+                      Text(d.substring(0, 2), style: context.text.labelSmall),
                 ),
               ),
           ],
@@ -407,10 +389,7 @@ class _MonthGrid extends StatelessWidget {
                 Expanded(
                   child: () {
                     final day = DateTime(
-                      start.year,
-                      start.month,
-                      start.day + week * 7 + i,
-                    );
+                        start.year, start.month, start.day + week * 7 + i);
                     final inMonth = day.month == month.month;
                     final isSelected = isSameDay(day, selected);
                     final isToday = isSameDay(day, today);
@@ -464,8 +443,7 @@ class _MonthGrid extends StatelessWidget {
                                           width: 5,
                                           height: 5,
                                           margin: const EdgeInsets.symmetric(
-                                            horizontal: 1,
-                                          ),
+                                              horizontal: 1),
                                           decoration: BoxDecoration(
                                             color: isSelected
                                                 ? c.onAccent
@@ -590,23 +568,18 @@ class _EventEditorState extends State<_EventEditor> {
     final startsAt = _at(_start);
     final endsAt = _end == null ? null : _at(_end!);
     if (endsAt != null && !endsAt.isAfter(startsAt)) {
-      showToast(
-        context,
-        'End time must be after the start time',
-        kind: ToastKind.error,
-      );
+      showToast(context, 'End time must be after the start time',
+          kind: ToastKind.error);
       return;
     }
-    Navigator.of(context).pop(
-      _EventDraft(
-        title: _title.text.trim(),
-        kind: _kind,
-        startsAt: startsAt,
-        endsAt: endsAt,
-        departmentId: _departmentId,
-        courseId: _courseId,
-      ),
-    );
+    Navigator.of(context).pop(_EventDraft(
+      title: _title.text.trim(),
+      kind: _kind,
+      startsAt: startsAt,
+      endsAt: endsAt,
+      departmentId: _departmentId,
+      courseId: _courseId,
+    ));
   }
 
   Future<void> _delete() async {
@@ -668,12 +641,9 @@ class _EventEditorState extends State<_EventEditor> {
                 child: _end == null
                     ? OutlinedButton.icon(
                         key: const Key('event-add-end'),
-                        onPressed: () => setState(
-                          () => _end = TimeOfDay(
+                        onPressed: () => setState(() => _end = TimeOfDay(
                             hour: (_start.hour + 1) % 24,
-                            minute: _start.minute,
-                          ),
-                        ),
+                            minute: _start.minute)),
                         icon: const Icon(Icons.add_rounded, size: 18),
                         label: const Text('End time'),
                       )
@@ -694,16 +664,12 @@ class _EventEditorState extends State<_EventEditor> {
               decoration: const InputDecoration(labelText: 'Department'),
               items: [
                 const DropdownMenuItem<String?>(
-                  value: null,
-                  child: Text('All departments'),
-                ),
+                    value: null, child: Text('All departments')),
                 for (final d in widget.departments)
                   DropdownMenuItem<String?>(
                     value: d['id']?.toString(),
-                    child: Text(
-                      d['name']?.toString() ?? '',
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text(d['name']?.toString() ?? '',
+                        overflow: TextOverflow.ellipsis),
                   ),
               ],
               onChanged: (v) => setState(() => _departmentId = v),
@@ -719,24 +685,18 @@ class _EventEditorState extends State<_EventEditor> {
               items: [
                 if (!widget.requireCourse)
                   const DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Campus-wide'),
-                  ),
+                      value: null, child: Text('Campus-wide')),
                 for (final c in widget.courses)
                   DropdownMenuItem<String?>(
                     value: c.id,
-                    child: Text(
-                      '${c.code} · ${c.title}',
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                    child: Text('${c.code} · ${c.title}',
+                        overflow: TextOverflow.ellipsis),
                   ),
                 // Keep an event's course selectable even if it is not listed.
                 if (_courseId != null &&
                     !widget.courses.any((c) => c.id == _courseId))
                   DropdownMenuItem<String?>(
-                    value: _courseId,
-                    child: Text(_courseId!),
-                  ),
+                      value: _courseId, child: Text(_courseId!)),
               ],
               onChanged: (v) => setState(() => _courseId = v),
               validator: (v) => widget.requireCourse && v == null
@@ -752,8 +712,7 @@ class _EventEditorState extends State<_EventEditor> {
                   key: const Key('event-delete'),
                   onPressed: _delete,
                   style: TextButton.styleFrom(
-                    foregroundColor: context.colors.danger,
-                  ),
+                      foregroundColor: context.colors.danger),
                   icon: const Icon(Icons.delete_outline_rounded, size: 18),
                   label: const Text('Delete'),
                 ),

@@ -33,18 +33,12 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        api.getDepartments(),
-        api.getStudents(),
-      ]);
+      final results =
+          await Future.wait([api.getDepartments(), api.getStudents()]);
       final departments = results[0];
-      final memberLists = await Future.wait(
-        departments.map(
-          (d) => api
-              .getStudentsByDepartment(d['id'].toString())
-              .catchError((_) => <Map<String, dynamic>>[]),
-        ),
-      );
+      final memberLists = await Future.wait(departments.map((d) => api
+          .getStudentsByDepartment(d['id'].toString())
+          .catchError((_) => <Map<String, dynamic>>[])));
       if (!mounted) return;
       setState(() {
         _departments = departments;
@@ -82,11 +76,9 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
     );
     if (saved == true) {
       if (mounted) {
-        showToast(
-          context,
-          department == null ? 'Department created' : 'Department updated',
-          kind: ToastKind.success,
-        );
+        showToast(context,
+            department == null ? 'Department created' : 'Department updated',
+            kind: ToastKind.success);
       }
       await _load();
     }
@@ -128,12 +120,10 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
   Widget build(BuildContext context) {
     final q = _query.trim().toLowerCase();
     final shown = _departments
-        .where(
-          (d) =>
-              q.isEmpty ||
-              (d['name']?.toString().toLowerCase() ?? '').contains(q) ||
-              (d['code']?.toString().toLowerCase() ?? '').contains(q),
-        )
+        .where((d) =>
+            q.isEmpty ||
+            (d['name']?.toString().toLowerCase() ?? '').contains(q) ||
+            (d['code']?.toString().toLowerCase() ?? '').contains(q))
         .toList();
 
     return AppPage(
@@ -161,22 +151,19 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
                 minItemWidth: 160,
                 children: [
                   StatTile(
-                    label: 'Departments',
-                    value: '${_departments.length}',
-                    icon: Icons.account_tree_outlined,
-                    tone: Tone.info,
-                  ),
+                      label: 'Departments',
+                      value: '${_departments.length}',
+                      icon: Icons.account_tree_outlined,
+                      tone: Tone.info),
                   StatTile(
-                    label: 'Students',
-                    value: '${_students.length}',
-                    icon: Icons.groups_outlined,
-                  ),
+                      label: 'Students',
+                      value: '${_students.length}',
+                      icon: Icons.groups_outlined),
                   StatTile(
-                    label: 'Unassigned',
-                    value: '$_unassigned',
-                    icon: Icons.person_off_outlined,
-                    tone: _unassigned == 0 ? Tone.success : Tone.warning,
-                  ),
+                      label: 'Unassigned',
+                      value: '$_unassigned',
+                      icon: Icons.person_off_outlined,
+                      tone: _unassigned == 0 ? Tone.success : Tone.warning),
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -187,9 +174,7 @@ class _DepartmentsScreenState extends State<DepartmentsScreen> {
               const SizedBox(height: AppSpacing.md),
               if (shown.isEmpty)
                 const EmptyState(
-                  icon: Icons.account_tree_outlined,
-                  title: 'No departments',
-                )
+                    icon: Icons.account_tree_outlined, title: 'No departments')
               else
                 ResponsiveGrid(
                   minItemWidth: 300,
@@ -239,15 +224,12 @@ class _DepartmentCard extends StatelessWidget {
           Row(
             children: [
               StatusBadge(
-                label: department['code']?.toString() ?? '',
-                tone: Tone.accent,
-              ),
+                  label: department['code']?.toString() ?? '',
+                  tone: Tone.accent),
               const SizedBox(width: AppSpacing.xs),
               Expanded(
-                child: Text(
-                  department['category']?.toString() ?? '',
-                  style: context.text.bodySmall,
-                ),
+                child: Text(department['category']?.toString() ?? '',
+                    style: context.text.bodySmall),
               ),
               PopupMenuButton<String>(
                 key: Key('department-menu-$id'),
@@ -260,12 +242,10 @@ class _DepartmentCard extends StatelessWidget {
               ),
             ],
           ),
-          Text(
-            department['name']?.toString() ?? '',
-            style: context.text.titleMedium,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(department['name']?.toString() ?? '',
+              style: context.text.titleMedium,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis),
           const SizedBox(height: AppSpacing.sm),
           Row(
             children: [
@@ -273,9 +253,7 @@ class _DepartmentCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(right: AppSpacing.xxs),
                   child: Avatar(
-                    name: m['displayName']?.toString() ?? '?',
-                    size: 28,
-                  ),
+                      name: m['displayName']?.toString() ?? '?', size: 28),
                 ),
               if (members.isNotEmpty) const SizedBox(width: AppSpacing.xxs),
               Text(
@@ -381,10 +359,8 @@ class _DepartmentFormState extends State<_DepartmentForm> {
             key: const Key('department-code'),
             controller: _code,
             textCapitalization: TextCapitalization.characters,
-            decoration: const InputDecoration(
-              labelText: 'Code',
-              hintText: 'e.g. CIT',
-            ),
+            decoration:
+                const InputDecoration(labelText: 'Code', hintText: 'e.g. CIT'),
             validator: (v) =>
                 (v == null || v.trim().isEmpty) ? 'Enter a short code' : null,
           ),
@@ -462,14 +438,10 @@ class _MembersPanelState extends State<_MembersPanel> {
       final api = ApiService.instance;
       if (add) {
         await api.enrollStudentInDepartment(
-          studentId: id,
-          departmentId: _deptId,
-        );
+            studentId: id, departmentId: _deptId);
       } else {
         await api.unenrollStudentFromDepartment(
-          studentId: id,
-          departmentId: _deptId,
-        );
+            studentId: id, departmentId: _deptId);
       }
       await _load();
     } catch (e) {
@@ -498,8 +470,7 @@ class _MembersPanelState extends State<_MembersPanel> {
             ? const SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              )
+                child: CircularProgressIndicator(strokeWidth: 2))
             : member
                 ? IconButton(
                     key: Key('member-remove-$id'),
@@ -529,10 +500,8 @@ class _MembersPanelState extends State<_MembersPanel> {
         Text('ADD STUDENTS', style: context.text.labelSmall),
         const SizedBox(height: AppSpacing.xs),
         if (others.isEmpty)
-          Text(
-            'Every student is already a member.',
-            style: context.text.bodyMedium,
-          )
+          Text('Every student is already a member.',
+              style: context.text.bodyMedium)
         else
           for (final s in others) row(s, false),
       ],

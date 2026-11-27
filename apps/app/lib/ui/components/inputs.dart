@@ -68,8 +68,7 @@ class FilterChips<T> extends StatelessWidget {
                       o.value == selected ? FontWeight.w600 : FontWeight.w500,
                 ),
                 side: BorderSide(
-                  color: o.value == selected ? c.accent : c.border,
-                ),
+                    color: o.value == selected ? c.accent : c.border),
               ),
             ),
         ],
@@ -202,10 +201,8 @@ class TimePickerField extends StatelessWidget {
     return InkWell(
       borderRadius: AppRadius.mdAll,
       onTap: () async {
-        final picked = await showTimePicker(
-          context: context,
-          initialTime: value,
-        );
+        final picked =
+            await showTimePicker(context: context, initialTime: value);
         if (picked != null) onChanged(picked);
       },
       child: InputDecorator(
@@ -242,9 +239,7 @@ class BusyButton extends StatelessWidget {
             width: 18,
             height: 18,
             child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: context.colors.onAccent,
-            ),
+                strokeWidth: 2, color: context.colors.onAccent),
           )
         : Text(label);
     if (icon != null && !busy) {

@@ -45,31 +45,23 @@ class AppPage extends StatelessWidget {
           ),
         );
 
-    final header = PageHeader(
-      title: title,
-      subtitle: subtitle,
-      actions: actions,
-    );
+    final header =
+        PageHeader(title: title, subtitle: subtitle, actions: actions);
 
     Widget scroll = CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverPadding(
-          padding: EdgeInsets.fromLTRB(
-            hPad,
-            AppSpacing.lg,
-            hPad,
-            AppSpacing.md,
-          ),
+          padding:
+              EdgeInsets.fromLTRB(hPad, AppSpacing.lg, hPad, AppSpacing.md),
           sliver: SliverToBoxAdapter(child: constrain(header)),
         ),
         if (slivers != null)
-          ...slivers!.map(
-            (s) => SliverPadding(
-              padding: EdgeInsets.symmetric(horizontal: hPad),
-              sliver: SliverCrossAxisConstrained(maxWidth: maxWidth, sliver: s),
-            ),
-          )
+          ...slivers!.map((s) => SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: hPad),
+                sliver:
+                    SliverCrossAxisConstrained(maxWidth: maxWidth, sliver: s),
+              ))
         else
           SliverPadding(
             padding: EdgeInsets.symmetric(horizontal: hPad),
@@ -113,16 +105,14 @@ class SliverCrossAxisConstrained extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
-        final extra = constraints.crossAxisExtent - maxWidth;
-        final pad = extra > 0 ? extra / 2 : 0.0;
-        return SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: pad),
-          sliver: sliver,
-        );
-      },
-    );
+    return SliverLayoutBuilder(builder: (context, constraints) {
+      final extra = constraints.crossAxisExtent - maxWidth;
+      final pad = extra > 0 ? extra / 2 : 0.0;
+      return SliverPadding(
+        padding: EdgeInsets.symmetric(horizontal: pad),
+        sliver: sliver,
+      );
+    });
   }
 }
 
@@ -143,12 +133,10 @@ class PageHeader extends StatelessWidget {
     final titleBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: context.isCompact
-              ? context.text.headlineSmall
-              : context.text.headlineMedium,
-        ),
+        Text(title,
+            style: context.isCompact
+                ? context.text.headlineSmall
+                : context.text.headlineMedium),
         if (subtitle != null) ...[
           const SizedBox(height: AppSpacing.xxs),
           Text(subtitle!, style: context.text.bodyMedium),
@@ -226,25 +214,23 @@ class ResponsiveGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Never create more columns than items, so a short row fills the width.
-        final columns =
-            ((constraints.maxWidth + spacing) / (minItemWidth + spacing))
-                .floor()
-                .clamp(1, children.isEmpty ? 1 : children.length.clamp(1, 6));
-        final itemWidth =
-            (constraints.maxWidth - spacing * (columns - 1)) / columns;
-        return Wrap(
-          spacing: spacing,
-          runSpacing: spacing,
-          children: [
-            for (final child in children)
-              SizedBox(width: itemWidth, child: child),
-          ],
-        );
-      },
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      // Never create more columns than items, so a short row fills the width.
+      final columns =
+          ((constraints.maxWidth + spacing) / (minItemWidth + spacing))
+              .floor()
+              .clamp(1, children.isEmpty ? 1 : children.length.clamp(1, 6));
+      final itemWidth =
+          (constraints.maxWidth - spacing * (columns - 1)) / columns;
+      return Wrap(
+        spacing: spacing,
+        runSpacing: spacing,
+        children: [
+          for (final child in children)
+            SizedBox(width: itemWidth, child: child),
+        ],
+      );
+    });
   }
 }
 
@@ -267,27 +253,21 @@ class TwoPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < breakpoint) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              primary,
-              const SizedBox(height: AppSpacing.lg),
-              secondary,
-            ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: primaryFlex, child: primary),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(flex: secondaryFlex, child: secondary),
-          ],
+    return LayoutBuilder(builder: (context, constraints) {
+      if (constraints.maxWidth < breakpoint) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [primary, const SizedBox(height: AppSpacing.lg), secondary],
         );
-      },
-    );
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(flex: primaryFlex, child: primary),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(flex: secondaryFlex, child: secondary),
+        ],
+      );
+    });
   }
 }

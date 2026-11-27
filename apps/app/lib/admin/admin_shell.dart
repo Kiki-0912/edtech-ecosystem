@@ -107,11 +107,7 @@ class AdminShell extends StatelessWidget {
       builder: (ctx) => SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            0,
-            AppSpacing.md,
-            AppSpacing.md,
-          ),
+              AppSpacing.md, 0, AppSpacing.md, AppSpacing.md),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -163,16 +159,11 @@ class _Sidebar extends StatelessWidget {
             onTap: () => onSelect(d),
             child: Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.sm,
-              ),
+                  horizontal: AppSpacing.sm, vertical: AppSpacing.sm),
               child: Row(
                 children: [
-                  Icon(
-                    selected ? d.selectedIcon : d.icon,
-                    size: 20,
-                    color: selected ? c.accentText : c.textMuted,
-                  ),
+                  Icon(selected ? d.selectedIcon : d.icon,
+                      size: 20, color: selected ? c.accentText : c.textMuted),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
@@ -203,18 +194,12 @@ class _Sidebar extends StatelessWidget {
           children: [
             const Padding(
               padding: EdgeInsets.fromLTRB(
-                AppSpacing.xs,
-                AppSpacing.xs,
-                0,
-                AppSpacing.lg,
-              ),
+                  AppSpacing.xs, AppSpacing.xs, 0, AppSpacing.lg),
               child: Row(
                 children: [
                   BrandMark(),
                   SizedBox(width: AppSpacing.xs),
-                  Flexible(
-                    child: StatusBadge(label: 'Admin', tone: Tone.info),
-                  ),
+                  Flexible(child: StatusBadge(label: 'Admin', tone: Tone.info)),
                 ],
               ),
             ),

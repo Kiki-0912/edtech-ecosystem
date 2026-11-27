@@ -41,10 +41,8 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       _error = null;
     });
     try {
-      final results = await Future.wait([
-        api.getAttendanceRecords(),
-        api.getCourses(),
-      ]);
+      final results =
+          await Future.wait([api.getAttendanceRecords(), api.getCourses()]);
       final courses = myCourses(user, results[1] as List<Course>);
       var records = results[0] as List<AttendanceRecord>;
       if (user.isStudent) {
@@ -128,10 +126,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
           isEmpty: false,
           builder: (_) => staff
               ? _StaffView(
-                  records: _records,
-                  courses: _courses,
-                  codeOf: _courseCode,
-                )
+                  records: _records, courses: _courses, codeOf: _courseCode)
               : _StudentView(records: _records, codeOf: _courseCode),
         ),
       ],
@@ -191,29 +186,25 @@ class _StudentView extends StatelessWidget {
                 spacing: AppSpacing.sm,
                 children: [
                   StatTile(
-                    label: 'Present',
-                    value: '${summary.present}',
-                    icon: Icons.check_circle_outline_rounded,
-                    tone: Tone.success,
-                  ),
+                      label: 'Present',
+                      value: '${summary.present}',
+                      icon: Icons.check_circle_outline_rounded,
+                      tone: Tone.success),
                   StatTile(
-                    label: 'Late',
-                    value: '${summary.late}',
-                    icon: Icons.schedule_rounded,
-                    tone: Tone.warning,
-                  ),
+                      label: 'Late',
+                      value: '${summary.late}',
+                      icon: Icons.schedule_rounded,
+                      tone: Tone.warning),
                   StatTile(
-                    label: 'Absent',
-                    value: '${summary.absent}',
-                    icon: Icons.cancel_outlined,
-                    tone: Tone.danger,
-                  ),
+                      label: 'Absent',
+                      value: '${summary.absent}',
+                      icon: Icons.cancel_outlined,
+                      tone: Tone.danger),
                   StatTile(
-                    label: 'Excused',
-                    value: '${summary.excused}',
-                    icon: Icons.verified_outlined,
-                    tone: Tone.info,
-                  ),
+                      label: 'Excused',
+                      value: '${summary.excused}',
+                      icon: Icons.verified_outlined,
+                      tone: Tone.info),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
@@ -259,50 +250,48 @@ class _DayStrip extends StatelessWidget {
       for (var i = 13; i >= 0; i--)
         DateTime(now.year, now.month, now.day).subtract(Duration(days: i)),
     ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final size = ((constraints.maxWidth - 13 * 4) / 14).clamp(14.0, 32.0);
-        return Wrap(
-          spacing: 4,
-          runSpacing: 4,
-          children: [
-            for (final d in days)
-              () {
-                final dayRecords = records.where((r) => r.date == isoDate(d));
-                final status =
-                    dayRecords.isEmpty ? null : dayRecords.first.status;
-                final color = status == null
-                    ? c.surfaceMuted
-                    : c.fg(attendanceTone(status));
-                return Tooltip(
-                  message: '${dayMonth(d)}: ${status ?? 'no class'}',
-                  child: Container(
-                    width: size,
-                    height: size,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: color,
-                      borderRadius: AppRadius.smAll,
-                    ),
-                    padding: const EdgeInsets.all(AppSpacing.xxs),
-                    // Scales the token style down to the cell instead of a
-                    // computed font size.
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '${d.day}',
-                        style: context.text.labelSmall?.copyWith(
-                          color: status == null ? c.textMuted : c.surface,
-                        ),
+    return LayoutBuilder(builder: (context, constraints) {
+      final size = ((constraints.maxWidth - 13 * 4) / 14).clamp(14.0, 32.0);
+      return Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (final d in days)
+            () {
+              final dayRecords = records.where((r) => r.date == isoDate(d));
+              final status =
+                  dayRecords.isEmpty ? null : dayRecords.first.status;
+              final color = status == null
+                  ? c.surfaceMuted
+                  : c.fg(attendanceTone(status));
+              return Tooltip(
+                message: '${dayMonth(d)}: ${status ?? 'no class'}',
+                child: Container(
+                  width: size,
+                  height: size,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: color,
+                    borderRadius: AppRadius.smAll,
+                  ),
+                  padding: const EdgeInsets.all(AppSpacing.xxs),
+                  // Scales the token style down to the cell instead of a
+                  // computed font size.
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      '${d.day}',
+                      style: context.text.labelSmall?.copyWith(
+                        color: status == null ? c.textMuted : c.surface,
                       ),
                     ),
                   ),
-                );
-              }(),
-          ],
-        );
-      },
-    );
+                ),
+              );
+            }(),
+        ],
+      );
+    });
   }
 }
 
@@ -354,23 +343,20 @@ class _StaffView extends StatelessWidget {
           minItemWidth: 180,
           children: [
             StatTile(
-              label: 'Attendance rate',
-              value: overall.percentLabel,
-              icon: Icons.insights_rounded,
-              tone: overall.rate >= 0.85 ? Tone.success : Tone.warning,
-            ),
+                label: 'Attendance rate',
+                value: overall.percentLabel,
+                icon: Icons.insights_rounded,
+                tone: overall.rate >= 0.85 ? Tone.success : Tone.warning),
             StatTile(
-              label: 'Sessions marked',
-              value: '${overall.total}',
-              icon: Icons.fact_check_outlined,
-              tone: Tone.info,
-            ),
+                label: 'Sessions marked',
+                value: '${overall.total}',
+                icon: Icons.fact_check_outlined,
+                tone: Tone.info),
             StatTile(
-              label: 'Absences',
-              value: '${overall.absent}',
-              icon: Icons.cancel_outlined,
-              tone: Tone.danger,
-            ),
+                label: 'Absences',
+                value: '${overall.absent}',
+                icon: Icons.cancel_outlined,
+                tone: Tone.danger),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -379,41 +365,33 @@ class _StaffView extends StatelessWidget {
             title: 'By course',
             child: courses.isEmpty
                 ? const EmptyState(
-                    icon: Icons.menu_book_outlined,
-                    title: 'No courses',
-                  )
+                    icon: Icons.menu_book_outlined, title: 'No courses')
                 : Column(
                     children: [
                       for (final c in courses)
                         () {
                           final s = AttendanceSummary.of(
-                            records.where((r) => r.courseId == c.id),
-                          );
+                              records.where((r) => r.courseId == c.id));
                           return InkWell(
                             borderRadius: AppRadius.mdAll,
                             onTap: () =>
                                 context.go('/attendance/mark?course=${c.id}'),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                vertical: AppSpacing.sm,
-                                horizontal: AppSpacing.xs,
-                              ),
+                                  vertical: AppSpacing.sm,
+                                  horizontal: AppSpacing.xs),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
                                     children: [
                                       Expanded(
-                                        child: Text(
-                                          '${c.code} · ${c.title}',
-                                          style: context.text.titleSmall,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                        child: Text('${c.code} · ${c.title}',
+                                            style: context.text.titleSmall,
+                                            overflow: TextOverflow.ellipsis),
                                       ),
-                                      Text(
-                                        s.percentLabel,
-                                        style: context.text.titleSmall,
-                                      ),
+                                      Text(s.percentLabel,
+                                          style: context.text.titleSmall),
                                     ],
                                   ),
                                   const SizedBox(height: AppSpacing.xs),
@@ -427,9 +405,8 @@ class _StaffView extends StatelessWidget {
                                   ),
                                   const SizedBox(height: AppSpacing.xxs),
                                   Text(
-                                    '${s.total} marks · ${s.absent} absent · ${s.late} late',
-                                    style: context.text.bodySmall,
-                                  ),
+                                      '${s.total} marks · ${s.absent} absent · ${s.late} late',
+                                      style: context.text.bodySmall),
                                 ],
                               ),
                             ),
@@ -510,10 +487,8 @@ class _ExcuseFormState extends State<_ExcuseForm> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Your teacher will see this in the course chat.',
-          style: context.text.bodyMedium,
-        ),
+        Text('Your teacher will see this in the course chat.',
+            style: context.text.bodyMedium),
         const SizedBox(height: AppSpacing.md),
         DropdownButtonFormField<String>(
           key: const Key('excuse-course'),
@@ -523,12 +498,9 @@ class _ExcuseFormState extends State<_ExcuseForm> {
           items: [
             for (final c in widget.courses)
               DropdownMenuItem(
-                value: c.id,
-                child: Text(
-                  '${c.code} · ${c.title}',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+                  value: c.id,
+                  child: Text('${c.code} · ${c.title}',
+                      overflow: TextOverflow.ellipsis)),
           ],
           onChanged: (v) => setState(() => _courseId = v ?? _courseId),
         ),
